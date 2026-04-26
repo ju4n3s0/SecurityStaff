@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shield — Detector de Amenazas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #080b0f;
+      --surface: #0d1117;
+      --surface-2: #161b22;
+      --border: #21262d;
+      --text: #e6edf3;
+      --text-muted: #7d8590;
+      --accent: #00d4ff;
+      --accent-dim: rgba(0, 212, 255, 0.12);
+      --safe: #39d353;
+      --safe-dim: rgba(57, 211, 83, 0.12);
+      --warn: #f0c000;
+      --warn-dim: rgba(240, 192, 0, 0.12);
+      --danger: #ff4444;
+      --danger-dim: rgba(255, 68, 68, 0.12);
+      --mono: 'Space Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 48px;
+      animation: fadeDown 0.6s ease;
+    }
+
+    .logo {
+      width: 52px;
+      height: 52px;
+      background: var(--accent-dim);
+      border: 1.5px solid var(--accent);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 0 24px rgba(0,212,255,0.2);
+    }
+
+    .brand h1 {
+      font-family: var(--sans);
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+
+    .brand p {
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .badge {
+      margin-left: auto;
+      background: var(--accent-dim);
+      border: 1px solid rgba(0,212,255,0.3);
+      color: var(--accent);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    /* Status bar */
+    .status-bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      animation: fadeDown 0.6s ease 0.1s both;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--safe);
+      box-shadow: 0 0 8px var(--safe);
+      animation: pulse 2s infinite;
+    }
+
+    /* Form panel */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+      animation: fadeUp 0.6s ease 0.2s both;
+    }
+
+    .panel-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    input, select, textarea {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,212,255,0.08);
+    }
+
+    select option { background: var(--surface-2); }
+
+    textarea {
+      resize: vertical;
+      min-height: 140px;
+      line-height: 1.6;
+    }
+
+    /* Type selector */
+    .type-selector {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .type-btn {
+      flex: 1;
+      padding: 10px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+
+    .type-btn.active {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Analyze button */
+    .btn-analyze {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #000;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-analyze:hover { filter: brightness(1.15); transform: translateY(-1px); }
+    .btn-analyze:active { transform: translateY(0); }
+    .btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-analyze.loading::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      animation: shimmer 1s infinite;
+    }
+
+    /* Examples */
+    .examples {
+      margin-bottom: 24px;
+      animation: fadeUp 0.6s ease 0.3s both;
+    }
+
+    .examples-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .examples-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .example-chip {
+      padding: 6px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .example-chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Result panel */
+    .result-panel {
+      display: none;
+      animation: fadeUp 0.4s ease;
+    }
+
+    .result-panel.visible { display: block; }
+
+    .result-card {
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .result-header {
+      padding: 24px 28px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .result-header.safe { background: var(--safe-dim); border-bottom: 1px solid rgba(57,211,83,0.2); }
+    .result-header.suspicious { background: var(--warn-dim); border-bottom: 1px solid rgba(240,192,0,0.2); }
+    .result-header.dangerous { background: var(--danger-dim); border-bottom: 1px solid rgba(255,68,68,0.2); }
+
+    .result-icon { font-size: 36px; }
+
+    .result-title {
+      font-family: var(--sans);
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .result-title.safe { color: var(--safe); }
+    .result-title.suspicious { color: var(--warn); }
+    .result-title.dangerous { color: var(--danger); }
+
+    .result-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .risk-meter {
+      margin-left: auto;
+      text-align: right;
+    }
+
+    .risk-score {
+      font-family: var(--sans);
+      font-size: 32px;
+      font-weight: 800;
+    }
+
+    .risk-bar-wrap {
+      width: 80px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .risk-bar {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.8s ease;
+    }
+
+    .result-body { padding: 24px 28px; background: var(--surface); }
+
+    .result-section { margin-bottom: 20px; }
+    .result-section:last-child { margin-bottom: 0; }
+
+    .section-title {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .explanation {
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text);
+      padding: 12px 16px;
+      background: var(--surface-2);
+      border-radius: 8px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .category-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .indicators-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .indicator-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text);
+      padding: 8px 12px;
+      background: var(--surface-2);
+      border-radius: 6px;
+    }
+
+    .indicator-item::before {
+      content: '▸';
+      color: var(--warn);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .recommendation {
+      font-size: 13px;
+      padding: 14px 16px;
+      background: var(--surface-2);
+      border-radius: 8px;
+      line-height: 1.6;
+      border: 1px solid var(--border);
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .meta-item { display: flex; gap: 6px; align-items: center; }
+    .meta-value { color: var(--text); }
+
+    /* Error state */
+    .error-box {
+      display: none;
+      padding: 14px 16px;
+      background: var(--danger-dim);
+      border: 1px solid rgba(255,68,68,0.3);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--danger);
+      margin-top: 12px;
+    }
+
+    .error-box.visible { display: block; }
+
+    /* Animations */
+    @keyframes fadeDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(0,0,0,0.3);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">🛡️</div>
+    <div class="brand">
+      <h1>SHIELD</h1>
+      <p>Detector de Amenazas · Gemini AI</p>
+    </div>
+    <span class="badge">PROTOTIPO v1.0</span>
+  </header>
+
+  <div class="status-bar">
+    <div class="status-dot"></div>
+    <span id="statusText">Servicio activo — listo para analizar mensajes</span>
+  </div>
+
+  <!-- Ejemplos -->
+  <div class="examples">
+    <div class="examples-label">// Mensajes de ejemplo para prueba rápida</div>
+    <div class="examples-grid">
+      <button class="example-chip" onclick="loadExample('phishing')">🎣 Phishing bancario</button>
+      <button class="example-chip" onclick="loadExample('prize')">🎰 Premio falso</button>
+      <button class="example-chip" onclick="loadExample('safe')">✅ Mensaje seguro</button>
+      <button class="example-chip" onclick="loadExample('malware')">💀 Link malicioso</button>
+      <button class="example-chip" onclick="loadExample('urgent')">⚡ Urgencia falsa</button>
+    </div>
+  </div>
+
+  <!-- Panel de entrada -->
+  <div class="panel">
+    <div class="panel-label">// Ingresar mensaje para análisis</div>
+
+    <div class="type-selector">
+      <button class="type-btn active" id="btn-sms" onclick="setType('sms')">📱 SMS</button>
+      <button class="type-btn" id="btn-email" onclick="setType('email')">📧 Email</button>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Remitente</label>
+        <input type="text" id="sender" placeholder="+57 300 000 0000" />
+      </div>
+      <div class="field" id="subjectField" style="display:none;">
+        <label>Asunto</label>
+        <input type="text" id="subject" placeholder="Asunto del correo..." />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Contenido del mensaje</label>
+      <textarea id="content" placeholder="Pega aquí el contenido del mensaje a analizar..."></textarea>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <button class="btn-analyze" id="analyzeBtn" onclick="analyzeMessage()">
+      ANALIZAR MENSAJE
+    </button>
+  </div>
+
+  <!-- Panel de resultado -->
+  <div class="result-panel" id="resultPanel">
+    <div class="result-card" id="resultCard">
+      <div class="result-header" id="resultHeader">
+        <span class="result-icon" id="resultIcon"></span>
+        <div>
+          <div class="result-title" id="resultTitle"></div>
+          <div class="result-subtitle" id="resultSubtitle"></div>
+        </div>
+        <div class="risk-meter">
+          <div class="risk-score" id="riskScore"></div>
+          <div class="risk-bar-wrap">
+            <div class="risk-bar" id="riskBar"></div>
+          </div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="result-section">
+          <div class="section-title">// Diagnóstico</div>
+          <div class="explanation" id="explanation"></div>
+        </div>
+        <div class="result-section">
+          <div class="section-title">// Categoría de amenaza</div>
+          <span class="category-tag" id="categoryTag"></span>
+        </div>
+        <div class="result-section" id="indicatorsSection">
+          <div class="section-title">// Indicadores detectados</div>
+          <div class="indicators-list" id="indicatorsList"></div>
+        </div>
+        <div class="result-section">
+          <div class="section-title">// Recomendación</div>
+          <div class="recommendation" id="recommendation"></div>
+        </div>
+        <div class="meta-row" id="metaRow"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let currentType = 'sms';
+
+  const examples = {
+    phishing: {
+      type: 'sms', sender: 'Bancolombia-SMS',
+      content: 'ALERTA BANCOLOMBIA: Su cuenta ha sido bloqueada por actividad sospechosa. Ingrese AHORA a http://bancolombia-seguro.xyz para desbloquearla o su dinero será retenido. Soporte: clic aqui.'
+    },
+    prize: {
+      type: 'sms', sender: '+57 310 4447821',
+      content: '🎉 FELICITACIONES! Fue seleccionado como ganador de $5.000.000 en nuestro sorteo. Para reclamar su premio envíe su nombre, cédula y datos bancarios a premioscolombia@gmail.com antes de las 6pm de HOY.'
+    },
+    safe: {
+      type: 'sms', sender: '+57 315 2231445',
+      content: 'Hola mamá, ya llegué a casa. El tráfico estuvo terrible hoy. Mañana paso a visitarla. Un abrazo!'
+    },
+    malware: {
+      type: 'email', sender: 'soporte@microsoft-update.ru', subject: 'Actualización de seguridad crítica requerida',
+      content: 'Estimado usuario de Windows: Se ha detectado un virus en su computador. Descargue INMEDIATAMENTE nuestra herramienta de limpieza en: http://bit.ly/win-fix-urgent. Si no lo hace en 24 horas su información personal será comprometida.'
+    },
+    urgent: {
+      type: 'sms', sender: 'DIAN-Colombia',
+      content: 'URGENTE - DIAN: Tiene una deuda pendiente de $890.000 con la DIAN. Si no regulariza su situación en las próximas 2 horas, se iniciará proceso judicial. Llame al 018000-DIAN o perderá sus bienes.'
+    }
+  };
+
+  function loadExample(key) {
+    const ex = examples[key];
+    setType(ex.type);
+    document.getElementById('sender').value = ex.sender;
+    document.getElementById('content').value = ex.content;
+    if (ex.subject) document.getElementById('subject').value = ex.subject;
+    document.getElementById('resultPanel').classList.remove('visible');
+    document.getElementById('errorBox').classList.remove('visible');
+  }
+
+  function setType(type) {
+    currentType = type;
+    document.getElementById('btn-sms').classList.toggle('active', type === 'sms');
+    document.getElementById('btn-email').classList.toggle('active', type === 'email');
+    document.getElementById('subjectField').style.display = type === 'email' ? 'flex' : 'none';
+    document.getElementById('sender').placeholder = type === 'sms' ? '+57 300 000 0000' : 'remitente@dominio.com';
+  }
+
+  async function analyzeMessage() {
+    const content = document.getElementById('content').value.trim();
+    const sender = document.getElementById('sender').value.trim() || 'Desconocido';
+    const subject = document.getElementById('subject').value.trim();
+    const btn = document.getElementById('analyzeBtn');
+    const errorBox = document.getElementById('errorBox');
+
+    errorBox.classList.remove('visible');
+    document.getElementById('resultPanel').classList.remove('visible');
+
+    if (!content) {
+      showError('Por favor ingresa el contenido del mensaje antes de analizar.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.classList.add('loading');
+    btn.innerHTML = '<span class="spinner"></span> ANALIZANDO CON GEMINI...';
+
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, type: currentType, sender, subject })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error del servidor');
+      renderResult(data);
+
+    } catch (err) {
+      showError(err.message || 'Error al conectar con el servidor. ¿Está Flask corriendo?');
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      btn.innerHTML = 'ANALIZAR MENSAJE';
+    }
+  }
+
+  function renderResult(data) {
+    const a = data.analysis;
+    const m = data.metadata;
+    const level = a.risk_level;
+    const score = a.risk_score;
+
+    const config = {
+      safe:       { icon: '✅', title: 'MENSAJE SEGURO',     color: 'var(--safe)',    barColor: '#39d353', label: 'Sin amenazas detectadas' },
+      suspicious: { icon: '⚠️', title: 'SOSPECHOSO',         color: 'var(--warn)',    barColor: '#f0c000', label: 'Requiere precaución' },
+      dangerous:  { icon: '🚨', title: 'MENSAJE PELIGROSO',  color: 'var(--danger)',  barColor: '#ff4444', label: 'Amenaza identificada' }
+    };
+    const c = config[level] || config.suspicious;
+
+    document.getElementById('resultHeader').className = `result-header ${level}`;
+    document.getElementById('resultIcon').textContent = c.icon;
+    document.getElementById('resultTitle').textContent = c.title;
+    document.getElementById('resultTitle').className = `result-title ${level}`;
+    document.getElementById('resultSubtitle').textContent = c.label;
+    document.getElementById('riskScore').textContent = `${Math.round(score * 100)}%`;
+    document.getElementById('riskScore').style.color = c.color;
+    document.getElementById('riskBar').style.width = `${score * 100}%`;
+    document.getElementById('riskBar').style.background = c.barColor;
+
+    document.getElementById('explanation').textContent = a.explanation;
+
+    const catLabels = {
+      none: '✓ Sin amenaza', phishing: '🎣 Phishing', fraud: '💳 Fraude',
+      spam: '📧 Spam', malware: '💀 Malware', social_engineering: '🧠 Ingeniería social',
+      scam: '🎰 Estafa', unknown: '❓ Desconocido'
+    };
+    const catColors = {
+      none: '#39d353', phishing: '#ff6b35', fraud: '#ff4444',
+      spam: '#f0c000', malware: '#ff0080', social_engineering: '#a855f7', scam: '#ff4444', unknown: '#7d8590'
+    };
+    const cat = a.threat_category;
+    const catEl = document.getElementById('categoryTag');
+    catEl.textContent = catLabels[cat] || cat;
+    catEl.style.background = (catColors[cat] || '#7d8590') + '22';
+    catEl.style.color = catColors[cat] || '#7d8590';
+    catEl.style.border = `1px solid ${catColors[cat] || '#7d8590'}55`;
+
+    const list = document.getElementById('indicatorsList');
+    const section = document.getElementById('indicatorsSection');
+    if (a.indicators && a.indicators.length > 0) {
+      list.innerHTML = a.indicators.map(i => `<div class="indicator-item">${i}</div>`).join('');
+      section.style.display = 'block';
+    } else {
+      section.style.display = 'none';
+    }
+
+    document.getElementById('recommendation').textContent = a.recommendation;
+
+    const ts = new Date(m.analyzed_at).toLocaleString('es-CO', { hour12: false });
+    document.getElementById('metaRow').innerHTML = `
+      <span class="meta-item">⏱ Analizado: <span class="meta-value">${ts}</span></span>
+      <span class="meta-item">🤖 Modelo: <span class="meta-value">${m.model_used}</span></span>
+      <span class="meta-item">📡 Fuente: <span class="meta-value">${m.analysis_source}</span></span>
+    `;
+
+    document.getElementById('resultPanel').classList.add('visible');
+    document.getElementById('resultPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('errorBox');
+    box.textContent = '⚠ ' + msg;
+    box.classList.add('visible');
+  }
+
+  // Check health on load
+  fetch('/api/health').then(r => r.json()).then(d => {
+    if (!d.gemini_configured) {
+      document.getElementById('statusText').textContent = '⚠ GEMINI_API_KEY no configurada — configúrala para análisis real';
+      document.querySelector('.status-dot').style.background = '#f0c000';
+    }
+  }).catch(() => {
+    document.getElementById('statusText').textContent = '✗ No se puede conectar con el servidor Flask';
+    document.querySelector('.status-dot').style.background = 'var(--danger)';
+  });
+</script>
+</body>
+</html>
