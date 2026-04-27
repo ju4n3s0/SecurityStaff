@@ -44,6 +44,10 @@ GEMINI_API_KEY=tu_clave python app.py
 ### 4. Abrir en el navegador
 ```
 http://localhost:5000
+
+or 
+
+http://192.168.1.9:5000
 ```
 
 ## API Endpoints
