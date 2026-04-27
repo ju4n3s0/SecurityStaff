@@ -457,71 +457,6 @@
 
     .error-box.visible { display: block; }
 
-    /* Sender analysis badge (H2) */
-    .sender-badge {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 12px;
-      border: 1px solid;
-    }
-
-    .sender-badge.safe {
-      background: var(--safe-dim);
-      border-color: rgba(57,211,83,0.3);
-      color: var(--safe);
-    }
-
-    .sender-badge.suspicious {
-      background: var(--warn-dim);
-      border-color: rgba(240,192,0,0.3);
-      color: var(--warn);
-    }
-
-    .sender-badge.spoofed, .sender-badge.dangerous {
-      background: var(--danger-dim);
-      border-color: rgba(255,68,68,0.3);
-      color: var(--danger);
-    }
-
-    .sender-badge .sender-icon { font-size: 18px; flex-shrink: 0; }
-
-    .sender-badge .sender-info { flex: 1; }
-
-    .sender-badge .sender-name {
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      margin-bottom: 2px;
-    }
-
-    .sender-badge .sender-reason {
-      font-size: 11px;
-      opacity: 0.85;
-      line-height: 1.5;
-    }
-
-    .sender-badge .sender-confidence {
-      font-family: var(--sans);
-      font-size: 18px;
-      font-weight: 800;
-      flex-shrink: 0;
-      text-align: right;
-    }
-
-    .sender-type-pill {
-      display: inline-block;
-      font-size: 9px;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      padding: 2px 8px;
-      border-radius: 10px;
-      border: 1px solid currentColor;
-      opacity: 0.8;
-      margin-top: 4px;
-    }
-
     /* Animations */
     @keyframes fadeDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
@@ -620,10 +555,6 @@
         </div>
       </div>
       <div class="result-body">
-        <div class="result-section" id="senderSection">
-          <div class="section-title">// Verificación de remitente</div>
-          <div id="senderBadge"></div>
-        </div>
         <div class="result-section">
           <div class="section-title">// Diagnóstico</div>
           <div class="explanation" id="explanation"></div>
@@ -730,34 +661,6 @@
     }
   }
 
-  function renderSenderAnalysis(sa) {
-    const el = document.getElementById('senderBadge');
-    if (!sa) { el.innerHTML = ''; return; }
-
-    const typeLabels = {
-      legitimate: 'Legítimo', spoofed: 'Suplantado',
-      suspicious: 'Sospechoso', unknown: 'Desconocido'
-    };
-    const badgeClass = sa.is_suspicious
-      ? (sa.sender_type === 'spoofed' ? 'spoofed' : 'suspicious')
-      : 'safe';
-    const icon = sa.is_suspicious
-      ? (sa.sender_type === 'spoofed' ? '🚨' : '⚠️')
-      : '✅';
-    const pct = Math.round(sa.confidence * 100);
-
-    el.innerHTML = `
-      <div class="sender-badge ${badgeClass}">
-        <span class="sender-icon">${icon}</span>
-        <div class="sender-info">
-          <div class="sender-name">${sa.sender}</div>
-          <div class="sender-reason">${sa.reason}</div>
-          <span class="sender-type-pill">${typeLabels[sa.sender_type] || sa.sender_type}</span>
-        </div>
-        <div class="sender-confidence">${pct}%</div>
-      </div>`;
-  }
-
   function renderResult(data) {
     const a = data.analysis;
     const m = data.metadata;
@@ -782,8 +685,6 @@
     document.getElementById('riskBar').style.background = c.barColor;
 
     document.getElementById('explanation').textContent = a.explanation;
-
-    renderSenderAnalysis(a.sender_analysis || null);
 
     const catLabels = {
       none: '✓ Sin amenaza', phishing: '🎣 Phishing', fraud: '💳 Fraude',

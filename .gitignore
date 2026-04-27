@@ -14,7 +14,7 @@ yarn-error.log*
 # 🔹 Variables de entorno
 
 .env
-
+.env.*
 *.env
 
 # 🔹 Archivos temporales
