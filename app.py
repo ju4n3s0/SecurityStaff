@@ -69,43 +69,6 @@ def analyze_message():
         return jsonify({'error': 'Error interno del servidor'}), 500
 
 
-@app.route('/api/analyze/sender', methods=['POST'])
-def analyze_sender():
-    """
-    H2 — Identificación de remitentes sospechosos vía API.
-    Recibe: { "sender": "...", "type": "sms|email", "subject": "", "content": "" }
-    Retorna: { "sender": "...", "is_suspicious": bool, "confidence": float,
-               "sender_type": "...", "reason": "...", "analyzed_at": "..." }
-    """
-    try:
-        data = request.get_json()
-        if not data or 'sender' not in data:
-            return jsonify({'error': 'El campo "sender" es requerido'}), 400
-
-        sender = data.get('sender', '').strip() or 'Desconocido'
-        msg_type = data.get('type', 'sms')
-        subject = data.get('subject', '')
-        content = data.get('content', '')
-
-        logger.info(f"Verificando remitente '{sender}' (tipo: {msg_type})")
-
-        sender_result = analyzer.analyze_sender(
-            sender=sender,
-            msg_type=msg_type,
-            subject=subject,
-            content=content,
-        )
-
-        return jsonify(sender_result.to_dict()), 200
-
-    except ConnectionError as e:
-        logger.error(f"Error de conexión con Gemini: {e}")
-        return jsonify({'error': 'No se pudo conectar con el servicio de análisis.'}), 503
-    except Exception as e:
-        logger.error(f"Error inesperado en analyze_sender: {e}")
-        return jsonify({'error': 'Error interno del servidor'}), 500
-
-
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Endpoint de salud para verificar el estado del servicio"""
@@ -136,8 +99,8 @@ if __name__ == '__main__':
     ║     Maliciosos con Gemini AI         ║
     ╚══════════════════════════════════════╝
     
-      Servidor iniciado en http://localhost:{port}
-      API Key configurada: {'✓ Sí' if app.config['GEMINI_API_KEY'] else '✗ No (configura GEMINI_API_KEY)'}
+    🛡️  Servidor iniciado en http://localhost:{port}
+    🔑  API Key configurada: {'✓ Sí' if app.config['GEMINI_API_KEY'] else '✗ No (configura GEMINI_API_KEY)'}
     """)
     
     app.run(debug=debug, host='0.0.0.0', port=port)

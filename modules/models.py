@@ -30,35 +30,6 @@ class ThreatCategory(str, Enum):
     UNKNOWN = "unknown"
 
 
-class SenderType(str, Enum):
-    LEGITIMATE = "legitimate"
-    SPOOFED = "spoofed"
-    SUSPICIOUS = "suspicious"
-    UNKNOWN = "unknown"
-
-
-@dataclass
-class SenderAnalysis:
-    """Resultado del análisis específico del remitente — H2"""
-
-    sender: str
-    is_suspicious: bool = False
-    confidence: float = 0.0          # 0.0 (confiable) → 1.0 (muy sospechoso)
-    sender_type: SenderType = SenderType.UNKNOWN
-    reason: str = ""
-    analyzed_at: str = field(default_factory=lambda: datetime.now().isoformat())
-
-    def to_dict(self) -> dict:
-        return {
-            "sender": self.sender,
-            "is_suspicious": self.is_suspicious,
-            "confidence": round(self.confidence, 2),
-            "sender_type": self.sender_type.value,
-            "reason": self.reason,
-            "analyzed_at": self.analyzed_at,
-        }
-
-
 @dataclass
 class MessageResult:
     """Resultado del análisis de un mensaje"""
@@ -69,16 +40,13 @@ class MessageResult:
     sender: str
     subject: str = ""
 
-    # Resultado del análisis de contenido
+    # Resultado del análisis
     risk_level: RiskLevel = RiskLevel.SAFE
-    risk_score: float = 0.0
+    risk_score: float = 0.0          # 0.0 (seguro) a 1.0 (muy peligroso)
     threat_category: ThreatCategory = ThreatCategory.NONE
     explanation: str = ""
     indicators: List[str] = field(default_factory=list)
     recommendation: str = ""
-
-    # Análisis del remitente (H2)
-    sender_analysis: Optional[SenderAnalysis] = None
 
     # Metadata
     analyzed_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -100,7 +68,6 @@ class MessageResult:
                 "explanation": self.explanation,
                 "indicators": self.indicators,
                 "recommendation": self.recommendation,
-                "sender_analysis": self.sender_analysis.to_dict() if self.sender_analysis else None,
             },
             "metadata": {
                 "analyzed_at": self.analyzed_at,
