@@ -51,7 +51,7 @@ No incluyas ningún texto fuera del JSON."""
 class MessageAnalyzer:
     """Analizador de mensajes usando Gemini AI"""
 
-    MODEL_NAME = "gemini-1.5-flash"
+    MODEL_NAME = "gemini-2.5-flash"
     VALID_RISK_LEVELS = {"safe", "suspicious", "dangerous"}
     VALID_CATEGORIES = {"none", "phishing", "fraud", "spam", "malware", "social_engineering", "scam", "unknown"}
 
