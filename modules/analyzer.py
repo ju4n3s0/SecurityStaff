@@ -167,10 +167,14 @@ class MessageAnalyzer:
                 f"type={result.sender_type}, confidence={result.confidence:.2f}"
             )
 
+        except RuntimeError:
+            raise
+
         except (ConnectionError, json.JSONDecodeError) as e:
             logger.error(f"Error analizando remitente: {e}")
             result.reason = "No se pudo verificar el remitente. Procede con precaución."
-
+            
+        
         return result
 
     def _call_gemini_content(self, content: str, msg_type: str, sender: str, subject: str) -> str:
@@ -205,9 +209,9 @@ class MessageAnalyzer:
         except Exception as e:
             error_msg = str(e).lower()
             if "api key" in error_msg or "authentication" in error_msg or "permission" in error_msg:
-                raise ConnectionError(f"Error de autenticación con Gemini: {e}")
-            elif "quota" in error_msg or "rate limit" in error_msg:
-                raise ConnectionError(f"Límite de cuota de Gemini alcanzado: {e}")
+                raise RuntimeError("API_KEY_INVALID")
+            elif "quota" in error_msg or "rate limit" in error_msg or "resource_exhausted" in error_msg:
+                raise RuntimeError("TOKENS_AGOTADOS")
             else:
                 raise ConnectionError(f"Error al contactar Gemini: {e}")
 

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'shield-dev-key-2024')
 app.config['GEMINI_API_KEY'] = os.environ.get('GEMINI_API_KEY', '')
-
+print("API KEY:", app.config['GEMINI_API_KEY'])
 analyzer = MessageAnalyzer(api_key=app.config['GEMINI_API_KEY'])
 
 
@@ -101,6 +101,25 @@ def analyze_sender():
     except ConnectionError as e:
         logger.error(f"Error de conexión con Gemini: {e}")
         return jsonify({'error': 'No se pudo conectar con el servicio de análisis.'}), 503
+    
+    except RuntimeError as e:
+        error_str = str(e)
+
+        if "TOKENS_AGOTADOS" in error_str:
+            return jsonify({
+                'error': 'Cuota de Gemini agotada',
+                'code': 'TOKENS_AGOTADOS'
+            }), 429
+
+        if "API_KEY_INVALID" in error_str:
+            return jsonify({
+                'error': 'API Key inválida',
+                'code': 'API_KEY_INVALID'
+            }), 401
+
+        logger.error(f"RuntimeError no manejado: {e}")
+        return jsonify({'error': error_str}), 500
+    
     except Exception as e:
         logger.error(f"Error inesperado en analyze_sender: {e}")
         return jsonify({'error': 'Error interno del servidor'}), 500
