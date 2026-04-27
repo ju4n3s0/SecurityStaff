@@ -6,11 +6,12 @@ import json
 import logging
 import re
 import google.generativeai as genai
-from modules.models import MessageResult, RiskLevel, ThreatCategory
+from modules.models import MessageResult, SenderAnalysis, RiskLevel, ThreatCategory, SenderType
 
 logger = logging.getLogger(__name__)
 
 
+# ── Prompt: análisis completo de contenido ────────────────────────────────────
 ANALYSIS_PROMPT = """Eres un experto en ciberseguridad especializado en detección de amenazas digitales.
 Analiza el siguiente mensaje y determina si es potencialmente malicioso.
 
@@ -48,12 +49,45 @@ Criterios de risk_score:
 No incluyas ningún texto fuera del JSON."""
 
 
+# ── Prompt: análisis exclusivo del remitente (H2) ─────────────────────────────
+SENDER_ANALYSIS_PROMPT = """Eres un experto en ciberseguridad especializado en identificación de remitentes maliciosos.
+
+Analiza únicamente el siguiente remitente de un {msg_type} y determina si es sospechoso o confiable.
+
+REMITENTE: {sender}
+{subject_line}
+CONTEXTO DEL MENSAJE (primeras 300 caracteres): {content_preview}
+
+Evalúa buscando señales como:
+- Spoofing de marcas conocidas (bancos, empresas, gobierno, operadoras)
+- Dominios falsos similares a legítimos (typosquatting, homógrafos)
+- Números desconocidos que se presentan como organizaciones oficiales
+- Patrones típicos de phishing/scam en el identificador del remitente
+- Inconsistencias entre el nombre visible y la dirección/número real
+
+Responde ÚNICAMENTE con un JSON válido:
+{{
+  "is_suspicious": true | false,
+  "confidence": <número entre 0.0 y 1.0>,
+  "sender_type": "legitimate" | "spoofed" | "suspicious" | "unknown",
+  "reason": "<explicación en máximo 1 oración>"
+}}
+
+Criterios de confidence:
+- 0.0 - 0.3: Remitente probablemente legítimo
+- 0.3 - 0.6: Remitente dudoso
+- 0.6 - 1.0: Remitente claramente sospechoso o falso
+
+No incluyas ningún texto fuera del JSON."""
+
+
 class MessageAnalyzer:
     """Analizador de mensajes usando Gemini AI"""
 
     MODEL_NAME = "gemini-1.5-flash"
     VALID_RISK_LEVELS = {"safe", "suspicious", "dangerous"}
     VALID_CATEGORIES = {"none", "phishing", "fraud", "spam", "malware", "social_engineering", "scam", "unknown"}
+    VALID_SENDER_TYPES = {"legitimate", "spoofed", "suspicious", "unknown"}
 
     def __init__(self, api_key: str):
         if not api_key:
@@ -65,18 +99,13 @@ class MessageAnalyzer:
             self._configured = True
             logger.info(f"MessageAnalyzer inicializado con modelo {self.MODEL_NAME}")
 
+    # ── Análisis principal ────────────────────────────────────────────────────
+
     def analyze(self, content: str, msg_type: str = "sms", sender: str = "Desconocido", subject: str = "") -> MessageResult:
         """
-        Analiza un mensaje y retorna el resultado de clasificación.
-        
-        Args:
-            content: Texto del mensaje a analizar
-            msg_type: Tipo de mensaje ('sms' o 'email')
-            sender: Remitente del mensaje
-            subject: Asunto del mensaje (para emails)
-        
-        Returns:
-            MessageResult con los datos del análisis
+        Analiza un mensaje completo: contenido + remitente (H2).
+
+        Devuelve MessageResult con sender_analysis incluido.
         """
         result = MessageResult(
             content=content,
@@ -93,13 +122,32 @@ class MessageAnalyzer:
             result.explanation = "API key de Gemini no configurada. Configura GEMINI_API_KEY para análisis real."
             result.indicators = ["Servicio de análisis no disponible"]
             result.recommendation = "Configura la variable de entorno GEMINI_API_KEY con tu clave de Gemini."
+            result.sender_analysis = SenderAnalysis(sender=sender, reason="Servicio no disponible")
             return result
 
         try:
-            raw_response = self._call_gemini(content, msg_type, sender, subject)
+            # Análisis del remitente (H2) — llamada dedicada
+            result.sender_analysis = self.analyze_sender(
+                sender=sender,
+                msg_type=msg_type,
+                subject=subject,
+                content=content,
+            )
+
+            # Análisis de contenido
+            raw_response = self._call_gemini_content(content, msg_type, sender, subject)
             parsed = self._parse_response(raw_response)
             self._populate_result(result, parsed)
-            logger.info(f"Análisis completado: risk_level={result.risk_level}, score={result.risk_score}")
+
+            # Si el remitente ya es sospechoso, garantizar que risk_level no baje de suspicious
+            if result.sender_analysis.is_suspicious and result.risk_level == RiskLevel.SAFE:
+                result.risk_level = RiskLevel.SUSPICIOUS
+                result.risk_score = max(result.risk_score, 0.35)
+
+            logger.info(
+                f"Análisis completado: risk={result.risk_level}, score={result.risk_score}, "
+                f"sender_suspicious={result.sender_analysis.is_suspicious}"
+            )
 
         except ConnectionError:
             raise
@@ -113,8 +161,57 @@ class MessageAnalyzer:
 
         return result
 
-    def _call_gemini(self, content: str, msg_type: str, sender: str, subject: str) -> str:
-        """Realiza la llamada a la API de Gemini"""
+    # ── H2: análisis de remitente ─────────────────────────────────────────────
+
+    def analyze_sender(
+        self,
+        sender: str,
+        msg_type: str = "sms",
+        subject: str = "",
+        content: str = "",
+    ) -> SenderAnalysis:
+        """
+        Consulta Gemini para verificar si un remitente es seguro o sospechoso.
+        Cumple los tres criterios de aceptación de H2:
+          - CA1: consulta la API para verificar el remitente
+          - CA2: devuelve is_suspicious=True con reason cuando es sospechoso
+          - CA3: devuelve is_suspicious=False cuando es confiable
+        """
+        result = SenderAnalysis(sender=sender)
+
+        if not self._configured:
+            result.reason = "Servicio no disponible — configura GEMINI_API_KEY."
+            return result
+
+        try:
+            raw = self._call_gemini_sender(sender, msg_type, subject, content)
+            parsed = self._parse_response(raw)
+
+            result.is_suspicious = bool(parsed.get("is_suspicious", False))
+            confidence = parsed.get("confidence", 0.0)
+            result.confidence = max(0.0, min(1.0, float(confidence)))
+
+            sender_type_str = parsed.get("sender_type", "unknown").lower()
+            if sender_type_str not in self.VALID_SENDER_TYPES:
+                sender_type_str = "unknown"
+            result.sender_type = SenderType(sender_type_str)
+
+            result.reason = parsed.get("reason", "Sin información adicional.")
+
+            logger.info(
+                f"Sender analysis: sender='{sender}', suspicious={result.is_suspicious}, "
+                f"type={result.sender_type}, confidence={result.confidence:.2f}"
+            )
+
+        except (ConnectionError, json.JSONDecodeError) as e:
+            logger.error(f"Error analizando remitente: {e}")
+            result.reason = "No se pudo verificar el remitente. Procede con precaución."
+
+        return result
+
+    # ── Llamadas a Gemini ─────────────────────────────────────────────────────
+
+    def _call_gemini_content(self, content: str, msg_type: str, sender: str, subject: str) -> str:
         subject_line = f"ASUNTO: {subject}\n" if subject else ""
         prompt = ANALYSIS_PROMPT.format(
             msg_type=msg_type.upper(),
@@ -122,13 +219,26 @@ class MessageAnalyzer:
             subject_line=subject_line,
             content=content
         )
+        return self._generate(prompt)
 
+    def _call_gemini_sender(self, sender: str, msg_type: str, subject: str, content: str) -> str:
+        subject_line = f"ASUNTO: {subject}\n" if subject else ""
+        content_preview = content[:300] if content else "Sin contenido disponible"
+        prompt = SENDER_ANALYSIS_PROMPT.format(
+            msg_type=msg_type.upper(),
+            sender=sender,
+            subject_line=subject_line,
+            content_preview=content_preview,
+        )
+        return self._generate(prompt)
+
+    def _generate(self, prompt: str) -> str:
         try:
             response = self._model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.1,
-                    max_output_tokens=1024,
+                    max_output_tokens=512,
                 )
             )
             return response.text
@@ -141,14 +251,13 @@ class MessageAnalyzer:
             else:
                 raise ConnectionError(f"Error al contactar Gemini: {e}")
 
+    # ── Parseo ────────────────────────────────────────────────────────────────
+
     def _parse_response(self, raw_text: str) -> dict:
-        """Parsea la respuesta JSON de Gemini"""
-        # Limpiar markdown si Gemini lo incluye
         clean = re.sub(r'```(?:json)?\s*|\s*```', '', raw_text).strip()
         return json.loads(clean)
 
     def _populate_result(self, result: MessageResult, data: dict) -> None:
-        """Popula el objeto resultado con los datos parseados"""
         risk_level_str = data.get("risk_level", "suspicious").lower()
         if risk_level_str not in self.VALID_RISK_LEVELS:
             risk_level_str = "suspicious"
