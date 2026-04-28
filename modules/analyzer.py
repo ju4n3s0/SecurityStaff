@@ -1,5 +1,5 @@
 """
-Módulo de análisis de mensajes con Gemini API
+Módulo de análisis de mensajes con Gemini API (VERSIÓN ROBUSTA)
 """
 
 import json
@@ -11,73 +11,52 @@ from modules.models import MessageResult, RiskLevel, ThreatCategory
 logger = logging.getLogger(__name__)
 
 
-ANALYSIS_PROMPT = """Eres un experto en ciberseguridad especializado en detección de amenazas digitales.
-Analiza el siguiente mensaje y determina si es potencialmente malicioso.
+ANALYSIS_PROMPT = """
+Responde ÚNICAMENTE con JSON válido. NO uses markdown, NO agregues texto extra.
 
-TIPO DE MENSAJE: {msg_type}
+Formato EXACTO:
+{{
+  "risk_level": "safe" | "suspicious" | "dangerous",
+  "risk_score": número entre 0.0 y 1.0,
+  "threat_category": "phishing" | "fraud" | "spam" | "malware" | "social_engineering" | "scam" | "none",
+  "explanation": "explicación corta",
+  "indicators": ["indicador1", "indicador2"],
+  "recommendation": "acción recomendada"
+}}
+
+Mensaje:
+TIPO: {msg_type}
 REMITENTE: {sender}
 {subject_line}
 CONTENIDO:
----
 {content}
----
-
-Evalúa el mensaje buscando señales de:
-- Phishing (suplantación de identidad, robo de credenciales)
-- Fraude financiero (solicitudes de dinero, premios falsos)
-- Spam agresivo con contenido engañoso
-- Malware (links maliciosos, archivos adjuntos sospechosos)
-- Ingeniería social (manipulación emocional, urgencia falsa)
-- Estafas (scams de cualquier tipo)
-
-Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
-{{
-  "risk_level": "safe" | "suspicious" | "dangerous",
-  "risk_score": <número entre 0.0 y 1.0>,
-  "threat_category": "none" | "phishing" | "fraud" | "spam" | "malware" | "social_engineering" | "scam" | "unknown",
-  "explanation": "<explicación clara y concisa de máximo 2 oraciones>",
-  "indicators": ["<indicador 1>", "<indicador 2>", ...],
-  "recommendation": "<acción recomendada al usuario>"
-}}
-
-Criterios de risk_score:
-- 0.0 - 0.3: Mensaje seguro
-- 0.3 - 0.6: Sospechoso, requiere precaución
-- 0.6 - 1.0: Peligroso, amenaza clara
-
-No incluyas ningún texto fuera del JSON."""
+"""
 
 
 class MessageAnalyzer:
-    """Analizador de mensajes usando Gemini AI"""
-
     MODEL_NAME = "gemini-2.5-flash"
+
     VALID_RISK_LEVELS = {"safe", "suspicious", "dangerous"}
-    VALID_CATEGORIES = {"none", "phishing", "fraud", "spam", "malware", "social_engineering", "scam", "unknown"}
+    VALID_CATEGORIES = {
+        "none", "phishing", "fraud", "spam",
+        "malware", "social_engineering", "scam"
+    }
 
     def __init__(self, api_key: str):
         if not api_key:
-            logger.warning("GEMINI_API_KEY no configurada. El análisis no funcionará correctamente.")
+            logger.warning("GEMINI_API_KEY no configurada.")
             self._configured = False
         else:
             genai.configure(api_key=api_key)
             self._model = genai.GenerativeModel(self.MODEL_NAME)
             self._configured = True
-            logger.info(f"MessageAnalyzer inicializado con modelo {self.MODEL_NAME}")
+            logger.info(f"Analyzer usando {self.MODEL_NAME}")
 
-    def analyze(self, content: str, msg_type: str = "sms", sender: str = "Desconocido", subject: str = "") -> MessageResult:
-        """
-        Analiza un mensaje y retorna el resultado de clasificación.
-        
-        Args:
-            content: Texto del mensaje a analizar
-            msg_type: Tipo de mensaje ('sms' o 'email')
-            sender: Remitente del mensaje
-            subject: Asunto del mensaje (para emails)
-        
-        Returns:
-            MessageResult con los datos del análisis
-        """
+    # =========================
+    # MÉTODO PRINCIPAL
+    # =========================
+    def analyze(self, content: str, msg_type="sms", sender="Desconocido", subject="") -> MessageResult:
+
         result = MessageResult(
             content=content,
             msg_type=msg_type,
@@ -87,35 +66,34 @@ class MessageAnalyzer:
         )
 
         if not self._configured:
-            result.risk_level = RiskLevel.SUSPICIOUS
-            result.risk_score = 0.5
-            result.threat_category = ThreatCategory.UNKNOWN
-            result.explanation = "API key de Gemini no configurada. Configura GEMINI_API_KEY para análisis real."
-            result.indicators = ["Servicio de análisis no disponible"]
-            result.recommendation = "Configura la variable de entorno GEMINI_API_KEY con tu clave de Gemini."
-            return result
+            return self._fallback_no_api(result)
 
         try:
-            raw_response = self._call_gemini(content, msg_type, sender, subject)
-            parsed = self._parse_response(raw_response)
+            raw = self._call_gemini(content, msg_type, sender, subject)
+            parsed = self._parse_response(raw)
             self._populate_result(result, parsed)
-            logger.info(f"Análisis completado: risk_level={result.risk_level}, score={result.risk_score}")
 
-        except ConnectionError:
-            raise
+        except ConnectionError as e:
+            logger.error(e)
+            return self._fallback_error(result, "Error de conexión con IA")
+
         except json.JSONDecodeError as e:
-            logger.error(f"Error al parsear respuesta de Gemini: {e}")
-            result.risk_level = RiskLevel.SUSPICIOUS
-            result.risk_score = 0.5
-            result.threat_category = ThreatCategory.UNKNOWN
-            result.explanation = "No se pudo procesar la respuesta del analizador. Revisa manualmente."
-            result.recommendation = "Procede con precaución y verifica el mensaje manualmente."
+            logger.error(f"JSON inválido: {e}")
+            return self._fallback_with_rules(result)
+
+        except Exception as e:
+            logger.error(f"Error inesperado: {e}")
+            return self._fallback_error(result, "Error interno del análisis")
 
         return result
 
-    def _call_gemini(self, content: str, msg_type: str, sender: str, subject: str) -> str:
-        """Realiza la llamada a la API de Gemini"""
-        subject_line = f"ASUNTO: {subject}\n" if subject else ""
+    # =========================
+    # GEMINI
+    # =========================
+    def _call_gemini(self, content, msg_type, sender, subject):
+
+        subject_line = f"ASUNTO: {subject}" if subject else ""
+
         prompt = ANALYSIS_PROMPT.format(
             msg_type=msg_type.upper(),
             sender=sender,
@@ -128,40 +106,106 @@ class MessageAnalyzer:
                 prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.1,
-                    max_output_tokens=1024,
+                    max_output_tokens=800,
                 )
             )
             return response.text
+
         except Exception as e:
-            error_msg = str(e).lower()
-            if "api key" in error_msg or "authentication" in error_msg or "permission" in error_msg:
-                raise ConnectionError(f"Error de autenticación con Gemini: {e}")
-            elif "quota" in error_msg or "rate limit" in error_msg:
-                raise ConnectionError(f"Límite de cuota de Gemini alcanzado: {e}")
-            else:
-                raise ConnectionError(f"Error al contactar Gemini: {e}")
+            raise ConnectionError(str(e))
 
+    # =========================
+    # PARSE ROBUSTO 🔥
+    # =========================
     def _parse_response(self, raw_text: str) -> dict:
-        """Parsea la respuesta JSON de Gemini"""
-        # Limpiar markdown si Gemini lo incluye
-        clean = re.sub(r'```(?:json)?\s*|\s*```', '', raw_text).strip()
-        return json.loads(clean)
 
-    def _populate_result(self, result: MessageResult, data: dict) -> None:
-        """Popula el objeto resultado con los datos parseados"""
-        risk_level_str = data.get("risk_level", "suspicious").lower()
-        if risk_level_str not in self.VALID_RISK_LEVELS:
-            risk_level_str = "suspicious"
-        result.risk_level = RiskLevel(risk_level_str)
+        if not raw_text:
+            raise json.JSONDecodeError("Empty", raw_text, 0)
 
-        risk_score = data.get("risk_score", 0.5)
-        result.risk_score = max(0.0, min(1.0, float(risk_score)))
+        # quitar markdown
+        clean = re.sub(r'```json|```', '', raw_text, flags=re.IGNORECASE).strip()
 
-        category_str = data.get("threat_category", "unknown").lower()
-        if category_str not in self.VALID_CATEGORIES:
-            category_str = "unknown"
-        result.threat_category = ThreatCategory(category_str)
+        # extraer JSON
+        match = re.search(r'\{.*\}', clean, re.DOTALL)
+        if not match:
+            raise json.JSONDecodeError("No JSON", raw_text, 0)
 
-        result.explanation = data.get("explanation", "Sin explicación disponible")
+        json_text = match.group()
+
+        return json.loads(json_text)
+
+    # =========================
+    # POPULAR RESULTADO
+    # =========================
+    def _populate_result(self, result: MessageResult, data: dict):
+
+        # risk level
+        rl = data.get("risk_level", "suspicious").lower()
+        if rl not in self.VALID_RISK_LEVELS:
+            rl = "suspicious"
+        result.risk_level = RiskLevel(rl)
+
+        # score
+        result.risk_score = max(0.0, min(1.0, float(data.get("risk_score", 0.5))))
+
+        # category con fallback inteligente 🔥
+        category = data.get("threat_category", "none").lower()
+
+        if category not in self.VALID_CATEGORIES or category == "none":
+            category = self._infer_category(result.content)
+
+        result.threat_category = ThreatCategory(category)
+
+        # resto
+        result.explanation = data.get("explanation", "")
         result.indicators = data.get("indicators", [])
-        result.recommendation = data.get("recommendation", "Procede con precaución.")
+        result.recommendation = data.get("recommendation", "")
+
+    # =========================
+    # FALLBACKS 🔥
+    # =========================
+    def _fallback_no_api(self, result):
+        result.risk_level = RiskLevel.SUSPICIOUS
+        result.risk_score = 0.5
+        result.threat_category = ThreatCategory.UNKNOWN
+        result.explanation = "API no configurada"
+        return result
+
+    def _fallback_error(self, result, message):
+        result.risk_level = RiskLevel.SUSPICIOUS
+        result.risk_score = 0.5
+        result.threat_category = ThreatCategory.UNKNOWN
+        result.explanation = message
+        return result
+
+    def _fallback_with_rules(self, result):
+        category = self._infer_category(result.content)
+
+        result.risk_level = RiskLevel.SUSPICIOUS
+        result.risk_score = 0.6
+        result.threat_category = ThreatCategory(category)
+        result.explanation = "Clasificado por reglas locales"
+        result.recommendation = "Revisar manualmente"
+
+        return result
+
+    # =========================
+    # REGLAS INTELIGENTES 🔥
+    # =========================
+    def _infer_category(self, content: str) -> str:
+
+        text = content.lower()
+
+        if any(x in text for x in ["banco", "cuenta", "contraseña", "verifica"]):
+            return "phishing"
+
+        if any(x in text for x in ["ganaste", "premio", "gratis"]):
+            return "scam"
+
+        if "http" in text or "www" in text:
+            return "malware"
+
+        if "urgente" in text:
+            return "social_engineering"
+
+        return "spam"
