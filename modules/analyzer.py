@@ -145,7 +145,31 @@ class MessageAnalyzer:
         """Parsea la respuesta JSON de Gemini"""
         # Limpiar markdown si Gemini lo incluye
         clean = re.sub(r'```(?:json)?\s*|\s*```', '', raw_text).strip()
-        return json.loads(clean)
+
+        # Intentar extraer el primer bloque JSON bien formado dentro del texto
+        # Buscamos la primera '{' y la última '}' y tratamos de parsear ese substring
+        start = clean.find('{')
+        end = clean.rfind('}')
+        if start == -1 or end == -1 or end <= start:
+            # No parece contener JSON válido
+            raise json.JSONDecodeError('No JSON encontrado en la respuesta', clean, 0)
+
+        candidate = clean[start:end+1]
+
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            # Intentar limpiar comas finales erróneas y caracteres no válidos comunes
+            # Eliminar comas antes de cierre de objetos/arrays: `,}` -> `}`  and `,]` -> `]`
+            fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
+            # Quitar caracteres de control no imprimibles
+            fixed = re.sub(r'[\x00-\x1f]+', '', fixed)
+
+            try:
+                return json.loads(fixed)
+            except json.JSONDecodeError as e:
+                # Como último recurso, re-lanzar el error para que el caller aplique fallback
+                raise
 
     def _populate_result(self, result: MessageResult, data: dict) -> None:
         """Popula el objeto resultado con los datos parseados"""

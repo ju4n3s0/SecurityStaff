@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Shield — Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root{--bg:#0b1220;--panel:#0f1720;--muted:#9aa4b2;--text:#e6edf3;--accent:#00d4ff;--safe:#39d353;--warn:#f0c000;--danger:#ff4444}
+      *{box-sizing:border-box}
+      body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,var(--bg),#071018);color:var(--text);margin:0;padding:28px}
+      .wrap{max-width:1100px;margin:0 auto}
+      header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+      header h1{font-size:20px;margin:0}
+      .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+      .panel{background:var(--panel);padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+      .controls{display:flex;gap:8px;align-items:center;width:100%}
+      .input,select{background:#07121a;border:1px solid #12202a;color:var(--text);padding:8px 10px;border-radius:8px}
+      .btn{background:var(--accent);color:#001;padding:8px 12px;border-radius:8px;border:none;cursor:pointer;font-weight:700}
+      table{width:100%;border-collapse:collapse;margin-top:12px}
+      th,td{padding:10px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.03);font-size:14px}
+      th{color:var(--muted);font-size:12px;text-transform:uppercase}
+      .badge{padding:6px 10px;border-radius:12px;font-weight:700}
+      .safe{color:var(--safe)}.suspicious{color:var(--warn)}.dangerous{color:var(--danger)}
+      .pager{display:flex;gap:8px;align-items:center;margin-top:12px}
+      .muted{color:var(--muted);font-size:13px}
+      /* modal */
+      .modal{position:fixed;inset:0;background:rgba(2,6,12,0.6);display:none;align-items:center;justify-content:center}
+      .modal.open{display:flex}
+      .modal-card{background:var(--panel);padding:18px;border-radius:10px;max-width:760px;width:94%}
+      .row{display:flex;gap:8px}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div style="font-size:28px">🛡️</div>
+        <div>
+          <h1>Shield — Bandeja de amenazas</h1>
+          <div class="muted">Correos analizados automáticamente y manualmente</div>
+        </div>
+      </header>
+
+      <div class="panel">
+        <div class="toolbar">
+          <div style="flex:1;display:flex;gap:8px;align-items:center">
+            <input id="q" class="input" placeholder="Buscar por remitente o asunto..." />
+            <select id="levelFilter" class="input">
+              <option value="">Todos los niveles</option>
+              <option value="dangerous">Peligroso</option>
+              <option value="suspicious">Sospechoso</option>
+              <option value="safe">Seguro</option>
+            </select>
+            <select id="pageSize" class="input">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+            </select>
+            <button id="refreshBtn" class="btn">Actualizar</button>
+          </div>
+          <div style="text-align:right">
+            <div class="muted">Total: <span id="total">0</span></div>
+          </div>
+        </div>
+
+        <div style="overflow:auto">
+          <table id="threatsTable">
+            <thead>
+              <tr>
+                <th style="width:48px">ID</th>
+                <th>Remitente</th>
+                <th>Asunto</th>
+                <th style="width:120px">Nivel</th>
+                <th style="width:80px">Score</th>
+                <th style="width:170px">Analizado</th>
+                <th style="width:220px">Acciones</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="pager">
+          <button id="prevBtn" class="btn">◀</button>
+          <div class="muted">Página <span id="page">1</span></div>
+          <button id="nextBtn" class="btn">▶</button>
+          <div style="margin-left:auto" class="muted">Cargando: <span id="loading">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal detalle -->
+    <div id="modal" class="modal">
+      <div class="modal-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong>Detalle de amenaza</strong>
+          <button id="closeModal" class="btn">Cerrar</button>
+        </div>
+        <div id="modalBody" style="white-space:pre-wrap;font-size:14px;color:var(--muted)"></div>
+      </div>
+    </div>
+
+    <script>
+      // Conexión Socket.IO para notificaciones en tiempo real
+      (function(){
+        const s = document.createElement('script');
+        s.src = 'https://cdn.socket.io/4.6.1/socket.io.min.js';
+        s.onload = () => {
+          try{
+            const socket = io();
+            socket.on('connect', ()=> console.info('Socket conectado'));
+            socket.on('new_threat', (data) => {
+              console.info('Nueva amenaza recibida', data);
+              // Insertar al inicio y actualizar tabla
+              allThreats.unshift(data);
+              totalEl.textContent = allThreats.length;
+              renderTable();
+              // Breve indicador visual
+              loadingEl.textContent = 'nueva!';
+              setTimeout(()=> loadingEl.textContent = 'no', 2500);
+            });
+          }catch(e){console.warn('Socket.IO no disponible', e)}
+        };
+        document.head.appendChild(s);
+      })();
+
+      const tbody = document.querySelector('#threatsTable tbody');
+      const totalEl = document.getElementById('total');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const qInput = document.getElementById('q');
+      const levelFilter = document.getElementById('levelFilter');
+      const pageSizeSel = document.getElementById('pageSize');
+      const pageEl = document.getElementById('page');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const loadingEl = document.getElementById('loading');
+      const modal = document.getElementById('modal');
+      const modalBody = document.getElementById('modalBody');
+      const closeModal = document.getElementById('closeModal');
+
+      let allThreats = [];
+      let page = 1;
+
+      async function fetchThreats(){
+        loadingEl.textContent = 'sí';
+        try{
+          const res = await fetch('/api/threats?limit=1000');
+          if(!res.ok) throw new Error('Error fetching');
+          const data = await res.json();
+          allThreats = data.threats || [];
+          totalEl.textContent = allThreats.length;
+          page = 1; renderTable();
+        }catch(e){
+          console.error(e);
+        }finally{ loadingEl.textContent = 'no' }
+      }
+
+      function renderTable(){
+        const q = qInput.value.trim().toLowerCase();
+        const level = levelFilter.value;
+        const pageSize = parseInt(pageSizeSel.value,10);
+
+        let list = allThreats.filter(t=>{
+          if(level && t.risk_level !== level) return false;
+          if(!q) return true;
+          return (t.sender||'').toLowerCase().includes(q) || (t.subject||'').toLowerCase().includes(q);
+        });
+
+        const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+        if(page>totalPages) page = totalPages;
+        const start = (page-1)*pageSize; const end = start + pageSize;
+        const pageItems = list.slice(start,end);
+
+        tbody.innerHTML = '';
+        pageEl.textContent = page + ' / ' + totalPages;
+
+        pageItems.forEach(t=>{
+          const tr = document.createElement('tr');
+          const lvl = t.risk_level || 'suspicious';
+          tr.innerHTML = `
+            <td>${t.id}</td>
+            <td>${t.sender||'-'}</td>
+            <td>${t.subject||'-'}</td>
+            <td class="${lvl}"><span class="badge ${lvl}">${(t.risk_level||'suspicious').toUpperCase()}</span></td>
+            <td>${Math.round((t.risk_score||0)*100)}%</td>
+            <td>${t.analyzed_at||''}</td>
+            <td>
+              <button class="btn" onclick="viewDetail(${t.id})">Ver</button>
+              <button class="btn" onclick="whitelist(${t.id})">Whitelist</button>
+              <button class="btn" onclick="confirmThreat(${t.id})">Confirmar</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      async function viewDetail(id){
+        const res = await fetch(`/api/threats/${id}`);
+        if(!res.ok){ alert('No se pudo obtener detalle'); return; }
+        const d = await res.json();
+        modalBody.textContent = `Remitente: ${d.sender}\nAsunto: ${d.subject}\nNivel: ${d.risk_level}\nScore: ${Math.round((d.risk_score||0)*100)}%\n\nExplicación:\n${d.explanation}\n\nIndicadores:\n${(d.indicators||[]).join('\n')}\n\nRecomendación:\n${d.recommendation}`;
+        modal.classList.add('open');
+      }
+
+      async function whitelist(id){
+        if(!confirm('Añadir a whitelist?')) return;
+        const res = await fetch(`/api/threats/${id}/whitelist`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({reason:'Whitelist desde dashboard'})});
+        if(res.ok) fetchThreats(); else alert('Error');
+      }
+
+      async function confirmThreat(id){
+        if(!confirm('Confirmar como amenaza real?')) return;
+        const res = await fetch(`/api/threats/${id}/confirm`, {method:'POST'});
+        if(res.ok) fetchThreats(); else alert('Error');
+      }
+
+      refreshBtn.addEventListener('click', fetchThreats);
+      qInput.addEventListener('input', ()=>{ page=1; renderTable(); });
+      levelFilter.addEventListener('change', ()=>{ page=1; renderTable(); });
+      pageSizeSel.addEventListener('change', ()=>{ page=1; renderTable(); });
+      prevBtn.addEventListener('click', ()=>{ if(page>1){ page--; renderTable(); } });
+      nextBtn.addEventListener('click', ()=>{ page++; renderTable(); });
+      closeModal.addEventListener('click', ()=> modal.classList.remove('open'));
+
+      // Inicio
+      fetchThreats();
+    </script>
+  </body>
+</html>
