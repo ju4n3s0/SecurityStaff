@@ -85,6 +85,13 @@ pnpm-lock.yaml
 *.xlsx
 *.json
 
+# 🔹 Google OAuth - Credenciales sensibles (NO subir al repo)
+
+credentials.json
+token.pickle
+token.json
+client_secret*.json
+
 # 🔹 Testing
 
 .coverage

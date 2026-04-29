@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shield — Detector de Amenazas</title>
+  <title>Security Staff — Detector de Amenazas</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
   <style>
@@ -483,10 +483,10 @@
   <header>
     <div class="logo">🛡️</div>
     <div class="brand">
-      <h1>SHIELD</h1>
+      <h1>SECURITY STAFF</h1>
       <p>Detector de Amenazas · Gemini AI</p>
     </div>
-    <span class="badge">PROTOTIPO v1.0</span>
+    <a href="/dashboard" class="badge" style="text-decoration: none; color: var(--accent); cursor: pointer;">IR AL HISTORIAL</a>
   </header>
 
   <div class="status-bar">
@@ -740,6 +740,27 @@
     document.getElementById('statusText').textContent = '✗ No se puede conectar con el servidor Flask';
     document.querySelector('.status-dot').style.background = 'var(--danger)';
   });
+
+  // Si viene del historial con un correo pendiente de analizar, pre-cargar el formulario
+  (function() {
+    const pending = sessionStorage.getItem('pendingAnalysis');
+    if (!pending) return;
+    sessionStorage.removeItem('pendingAnalysis');
+    try {
+      const d = JSON.parse(pending);
+      setType(d.type || 'email');
+      document.getElementById('sender').value = d.sender || '';
+      document.getElementById('subject').value = d.subject || '';
+      document.getElementById('content').value = d.content || '';
+      // Scroll al panel y auto-analizar si hay contenido
+      document.querySelector('.panel').scrollIntoView({ behavior: 'smooth' });
+      if (d.content) {
+        setTimeout(() => {
+          document.getElementById('statusText').textContent = 'Correo cargado desde historial — listo para analizar';
+        }, 400);
+      }
+    } catch(e) { console.warn('Error leyendo pendingAnalysis', e); }
+  })();
 </script>
 </body>
 </html>
