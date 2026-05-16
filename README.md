@@ -1,4 +1,4 @@
-# 🛡️ Shield — Detector de Mensajes Maliciosos con Gemini AI
+# 🛡️ SecurityStaff— Detector de Mensajes Maliciosos con Gemini AI
 
 Prototipo funcional para análisis de mensajes SMS y correos electrónicos usando Google Gemini.
 
