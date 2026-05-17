@@ -1,56 +1,143 @@
-from flask import Flask, request, jsonify
+# =====================================================================
+# SOLUCIÓN DEFINITIVA
+# =====================================================================
+# El problema es que Python sigue importando el módulo
+# modules.learning_service en lugar de la clase LearningService.
+#
+# REEMPLAZA LAS PRIMERAS LÍNEAS DE app.py POR ESTO EXACTAMENTE.
+# =====================================================================
+from modules.learning_service import LearningService
+from flask import Flask, request, jsonify, render_template
 import os
 
 from modules.analysis_service import AnalysisService
-from modules.learning_service import LearningService
-from flask import render_template
 
-# ==========================================
-# CONFIGURACIÓN DE LA APLICACIÓN
-# ==========================================
+# =====================================================================
+# INSTANCIAS DE SERVICIOS
+# =====================================================================
+
 app = Flask(__name__)
 
-# Servicio principal de análisis
 service = AnalysisService(
     api_key=os.getenv("GEMINI_API_KEY")
 )
 
-# Servicio del módulo de aprendizaje
+# IMPORTANTE: instancia de la clase, NO del módulo
 learning_service = LearningService()
 
 
-# ==========================================
-# HOME / HEALTH CHECK
-# ==========================================
-@app.route("/", methods=["GET"])
+
+# =====================================================================
+# RUTA PRINCIPAL
+# =====================================================================
+
+@app.route("/")
 def home():
-    """
-    Endpoint básico para verificar que la aplicación está activa.
-    """
+    return render_template("index.html")
+
+
+# =====================================================================
+# HEALTH CHECK
+# =====================================================================
+
+@app.route("/api/health")
+def api_health():
     return jsonify({
-        "status": "Shield activo",
-        "version": "1.0",
-        "services": {
-            "analysis": True,
-            "learning": True
-        }
+        "status": "ok",
+        "message": "Security Staff funcionando correctamente"
     })
 
 
-# ==========================================
-# ANÁLISIS DE MENSAJES
-# ==========================================
+# =====================================================================
+# PÁGINA DEL MÓDULO DE APRENDIZAJE
+# =====================================================================
+
+@app.route("/learning")
+def learning_page():
+    return render_template("learning.html")
+
+
+# =====================================================================
+# API - LECCIÓN DIARIA
+# =====================================================================
+
+@app.route("/api/learning/daily-lesson", methods=["GET"])
+def api_daily_lesson():
+    return jsonify(learning_service.get_daily_lesson())
+
+
+# =====================================================================
+# API - MARCAR LECCIÓN COMO COMPLETADA
+# =====================================================================
+
+@app.route("/api/learning/complete-lesson", methods=["POST"])
+def api_complete_lesson():
+    data = request.get_json() or {}
+    lesson_id = data.get("lesson_id")
+
+    if lesson_id is None:
+        return jsonify({
+            "success": False,
+            "error": "lesson_id es requerido"
+        }), 400
+
+    learning_service.complete_lesson(lesson_id)
+
+    return jsonify({
+        "success": True
+    })
+
+
+# =====================================================================
+# API - PREGUNTAS DE PRÁCTICA
+# =====================================================================
+
+@app.route("/api/learning/questions", methods=["GET"])
+def api_questions():
+    return jsonify(learning_service.get_questions())
+
+
+# =====================================================================
+# API - VALIDAR RESPUESTA
+# =====================================================================
+
+@app.route("/api/learning/check-answer", methods=["POST"])
+def api_check_answer():
+    data = request.get_json() or {}
+
+    question_id = data.get("question_id")
+    selected_option = data.get("selected_option")
+
+    if question_id is None or selected_option is None:
+        return jsonify({
+            "success": False,
+            "error": "question_id y selected_option son requeridos"
+        }), 400
+
+    result = learning_service.check_answer(
+        question_id,
+        selected_option
+    )
+
+    return jsonify(result)
+
+
+# =====================================================================
+# API - PROGRESO
+# =====================================================================
+
+@app.route("/api/learning/progress", methods=["GET"])
+def api_progress():
+    return jsonify(learning_service.get_progress())
+
+
+# =====================================================================
+# API - ANALIZAR MENSAJE
+# =====================================================================
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    """
-    Analiza un email o SMS y devuelve:
-    - Nivel de riesgo
-    - Categoría de amenaza
-    - Recomendaciones
-    - Recomendaciones preventivas del módulo educativo
-    """
-
-    data = request.get_json(silent=True) or {}
+    data = request.get_json() or {}
 
     content = data.get("content")
     msg_type = data.get("type")
@@ -59,56 +146,30 @@ def analyze():
 
     if not content or not msg_type:
         return jsonify({
-            "error": "Faltan datos obligatorios: content y type"
+            "error": "Faltan datos"
         }), 400
 
-    # Ejecutar análisis principal
     result = service.analyze_message(
-        content=content,
-        msg_type=msg_type,
-        sender=sender,
-        subject=subject
+        content,
+        msg_type,
+        sender,
+        subject
     )
 
-    # Si el resultado ya viene como dict
-    if isinstance(result, dict):
-        result_dict = result
-    else:
-        result_dict = result.to_dict()
-
-    # Obtener threat_category
-    threat_category = (
-        result_dict
-        .get("analysis", {})
-        .get("threat_category", "none")
-    )
-
-    # Agregar recomendaciones educativas contextuales (CA1)
-    result_dict["learning_recommendations"] = (
-        learning_service.get_contextual_recommendations(
-            threat_category
-        )
-    )
-
-    return jsonify(result_dict)
+    return jsonify(result)
 
 
-# ==========================================
+# =====================================================================
 # HISTORIAL
-# ==========================================
+# =====================================================================
+
 @app.route("/history", methods=["GET"])
 def history():
-    """
-    Retorna todos los registros del historial.
-    """
     return jsonify(service.history.get_all())
 
 
 @app.route("/history/<int:record_id>", methods=["GET"])
 def history_detail(record_id):
-    """
-    Retorna el detalle de un registro específico.
-    """
     record = service.history.get_by_id(record_id)
 
     if not record:
@@ -121,107 +182,30 @@ def history_detail(record_id):
 
 @app.route("/history/<int:record_id>/false-positive", methods=["POST"])
 def false_positive(record_id):
-    """
-    Marca un análisis como falso positivo.
-    """
-    success = service.history.mark_false_positive(record_id)
+    ok = service.history.mark_false_positive(record_id)
 
     return jsonify({
-        "success": success
+        "success": ok
     })
 
 
-# ==========================================
-# MÓDULO DE APRENDIZAJE - LECCIÓN DIARIA
-# ==========================================
-@app.route("/api/learning/daily-lesson", methods=["GET"])
-def get_daily_lesson():
-    """
-    Retorna la mini lección del día.
-    """
-    return jsonify(
-        learning_service.get_daily_lesson()
-    )
-
-
-@app.route("/api/learning/complete-lesson", methods=["POST"])
-def complete_lesson():
-    """
-    Marca una lección como completada.
-    """
-    data = request.get_json(silent=True) or {}
-
-    lesson_id = data.get("lesson_id")
-
-    if lesson_id is None:
-        return jsonify({
-            "error": "lesson_id es requerido"
-        }), 400
-
-    learning_service.complete_lesson(lesson_id)
-
-    return jsonify({
-        "success": True
-    })
-
-
-# ==========================================
-# MÓDULO DE APRENDIZAJE - QUIZ
-# ==========================================
-@app.route("/api/learning/questions", methods=["GET"])
-def get_questions():
-    """
-    Retorna la lista de preguntas de práctica.
-    """
-    return jsonify(
-        learning_service.get_questions()
-    )
-
-
-@app.route("/api/learning/check-answer", methods=["POST"])
-def check_answer():
-    """
-    Evalúa una respuesta del quiz.
-    """
-    data = request.get_json(silent=True) or {}
-
-    question_id = data.get("question_id")
-    selected_index = data.get("selected_index")
-
-    if question_id is None or selected_index is None:
-        return jsonify({
-            "error": "question_id y selected_index son requeridos"
-        }), 400
-
-    result = learning_service.check_answer(
-        question_id=question_id,
-        selected_index=selected_index
-    )
-
-    return jsonify(result)
-
-
-# ==========================================
-# MÓDULO DE APRENDIZAJE - PROGRESO
-# ==========================================
-@app.route("/api/learning/progress", methods=["GET"])
-def get_progress():
-    """
-    Retorna el progreso del usuario.
-    """
-    return jsonify(
-        learning_service.get_progress()
-    )
-
-
-# ==========================================
-# INICIO DE LA APLICACIÓN
-# ==========================================
-@app.route("/learning")
-def learning_page():
-    return render_template("learning.html")
+# =====================================================================
+# EJECUCIÓN
+# =====================================================================
 
 if __name__ == "__main__":
+    print("""
+======================================
+SECURITY STAFF - Detector Mensajes
+     Maliciosos con Gemini AI
+======================================
+
+> Servidor iniciado en http://localhost:5002
+> API Key configurada: {}
+""".format(
+        "Sí" if os.getenv("GEMINI_API_KEY") else "No (configura GEMINI_API_KEY)"
+    ))
+
     app.run(
         host="0.0.0.0",
         port=5002,

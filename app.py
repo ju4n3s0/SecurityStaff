@@ -4,6 +4,7 @@ Aplicación principal Flask
 """
 
 from flask import Flask, render_template, request, jsonify
+from modules.learning_service import LearningService
 from modules.analyzer import MessageAnalyzer
 from modules.models import MessageResult
 from modules.threat_database import ThreatDatabase
@@ -23,6 +24,7 @@ app.config['GEMINI_API_KEY'] = os.environ.get('GEMINI_API_KEY', '')
 analyzer = MessageAnalyzer(api_key=app.config['GEMINI_API_KEY'])
 db_file = os.environ.get('THREAT_DB_FILE', 'threats.db')
 threat_db = ThreatDatabase(db_file=db_file)
+learning_service = LearningService()
 
 
 @app.route('/')
@@ -36,6 +38,49 @@ def dashboard():
 @app.route('/learning')
 def learning():
     return render_template('learning.html')
+
+@app.route("/api/learning/daily-lesson", methods=["GET"])
+def api_daily_lesson():
+    lesson = learning_service.get_daily_lesson()
+    return jsonify({"lesson": lesson})
+
+
+@app.route("/api/learning/complete-lesson", methods=["POST"])
+def api_complete_lesson():
+    data = request.get_json() or {}
+    lesson_id = data.get("lesson_id")
+
+    if lesson_id is None:
+        return jsonify({"error": "lesson_id es requerido"}), 400
+
+    learning_service.complete_lesson(lesson_id)
+    return jsonify({"success": True})
+
+
+@app.route("/api/learning/questions", methods=["GET"])
+def api_questions():
+    return jsonify({"questions": learning_service.get_questions()})
+
+
+@app.route("/api/learning/check-answer", methods=["POST"])
+def api_check_answer():
+    data = request.get_json() or {}
+
+    question_id = data.get("question_id")
+    selected_index = data.get("selected_index")
+
+    if question_id is None or selected_index is None:
+        return jsonify({
+            "error": "question_id y selected_index son requeridos"
+        }), 400
+
+    result = learning_service.check_answer(question_id, int(selected_index))
+    return jsonify(result)
+
+
+@app.route("/api/learning/progress", methods=["GET"])
+def api_progress():
+    return jsonify(learning_service.get_progress())
 
 
 @app.route('/api/analyze', methods=['POST'])

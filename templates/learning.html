@@ -1,43 +1,586 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Aprende sobre Phishing</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Módulo de Aprendizaje — Security Staff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #080b0f;
+      --surface: #0d1117;
+      --surface-2: #161b22;
+      --border: #21262d;
+      --text: #e6edf3;
+      --text-muted: #7d8590;
+      --accent: #00d4ff;
+      --accent-dim: rgba(0,212,255,0.12);
+      --safe: #39d353;
+      --safe-dim: rgba(57,211,83,0.12);
+      --danger: #ff4444;
+      --danger-dim: rgba(255,68,68,0.12);
+      --warn: #f0c000;
+      --mono: 'Space Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* HEADER */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 40px;
+      animation: fadeDown 0.5s ease;
+    }
+    .logo {
+      width: 50px; height: 50px;
+      background: var(--accent-dim);
+      border: 1.5px solid var(--accent);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 24px rgba(0,212,255,0.2);
+    }
+    .brand h1 {
+      font-family: var(--sans);
+      font-size: 24px; font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .brand p { font-size: 11px; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+    .btn-back {
+      margin-left: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 1px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-back:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* TABS */
+    .tabs {
+      display: flex; gap: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px;
+      margin-bottom: 32px;
+      animation: fadeDown 0.5s ease 0.1s both;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid rgba(0,212,255,0.3);
+    }
+
+    /* PANELS */
+    .panel { display: none; animation: fadeUp 0.35s ease; }
+    .panel.active { display: block; }
+
+    /* SECTION LABEL */
+    .section-label {
+      font-size: 10px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    /* CARD */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+
+    /* LESSON CARD */
+    .lesson-header {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 16px;
+    }
+    .lesson-icon {
+      width: 48px; height: 48px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(0,212,255,0.3);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .lesson-title {
+      font-family: var(--sans);
+      font-size: 20px; font-weight: 800;
+      color: var(--text);
+    }
+    .lesson-body {
+      font-size: 14px; line-height: 1.8;
+      color: var(--text);
+      padding: 16px;
+      background: var(--surface-2);
+      border-radius: 10px;
+      border-left: 3px solid var(--accent);
+      margin-bottom: 16px;
+    }
+    .lesson-tip {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: rgba(240,192,0,0.08);
+      border: 1px solid rgba(240,192,0,0.25);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px; color: var(--warn);
+      margin-bottom: 20px;
+    }
+    .lesson-tip::before { content: '💡'; flex-shrink: 0; }
+    .badge-viewed {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--safe-dim);
+      border: 1px solid rgba(57,211,83,0.3);
+      color: var(--safe);
+      font-size: 11px; letter-spacing: 1px;
+      padding: 6px 12px; border-radius: 20px;
+    }
+
+    /* BUTTONS */
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--accent); color: #000;
+      font-family: var(--mono); font-size: 12px;
+      font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 12px 24px; border-radius: 10px;
+      border: none; cursor: pointer;
+      transition: filter 0.2s, transform 0.2s;
+    }
+    .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* QUIZ */
+    .question-counter {
+      display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 20px;
+    }
+    .q-progress-track {
+      flex: 1; height: 4px;
+      background: var(--border); border-radius: 2px;
+      margin-left: 16px; overflow: hidden;
+    }
+    .q-progress-fill {
+      height: 100%; background: var(--accent);
+      border-radius: 2px; transition: width 0.4s ease;
+    }
+    .scenario-tag {
+      display: inline-block;
+      background: var(--accent-dim);
+      border: 1px solid rgba(0,212,255,0.25);
+      color: var(--accent);
+      font-size: 11px; letter-spacing: 1px;
+      padding: 4px 12px; border-radius: 20px;
+      margin-bottom: 14px;
+    }
+    .question-text {
+      font-size: 15px; line-height: 1.7;
+      color: var(--text); margin-bottom: 20px;
+    }
+    .options-grid { display: flex; flex-direction: column; gap: 10px; }
+    .option-btn {
+      width: 100%; padding: 14px 18px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--mono); font-size: 13px;
+      text-align: left; border-radius: 10px;
+      cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .option-btn:not(:disabled):hover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .option-btn.correct {
+      border-color: var(--safe);
+      background: var(--safe-dim);
+      color: var(--safe);
+    }
+    .option-btn.wrong {
+      border-color: var(--danger);
+      background: var(--danger-dim);
+      color: var(--danger);
+    }
+    .option-btn:disabled { cursor: not-allowed; }
+    .option-letter {
+      width: 24px; height: 24px;
+      border: 1px solid currentColor;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+
+    /* FEEDBACK */
+    .feedback-box {
+      margin-top: 18px; padding: 16px 18px;
+      border-radius: 10px; font-size: 13px; line-height: 1.7;
+      animation: fadeUp 0.3s ease;
+    }
+    .feedback-box.correct {
+      background: var(--safe-dim);
+      border: 1px solid rgba(57,211,83,0.3);
+    }
+    .feedback-box.wrong {
+      background: var(--danger-dim);
+      border: 1px solid rgba(255,68,68,0.3);
+    }
+    .feedback-title {
+      font-weight: 700; font-size: 14px;
+      margin-bottom: 6px;
+    }
+    .feedback-box.correct .feedback-title { color: var(--safe); }
+    .feedback-box.wrong .feedback-title { color: var(--danger); }
+
+    /* PROGRESS */
+    .progress-stat {
+      display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 12px;
+    }
+    .stat-label { font-size: 11px; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; }
+    .stat-value { font-family: var(--sans); font-size: 28px; font-weight: 800; color: var(--accent); }
+    .progress-bar-wrap {
+      width: 100%; height: 12px;
+      background: var(--surface-2); border-radius: 6px;
+      overflow: hidden; margin: 8px 0 20px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #0099ff);
+      border-radius: 6px;
+      transition: width 0.8s ease;
+    }
+    .motivation {
+      font-size: 14px; color: var(--warn);
+      font-style: italic; margin-top: 8px;
+    }
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; margin-top: 16px;
+    }
+    .stat-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px;
+      text-align: center;
+    }
+    .stat-box .num { font-family: var(--sans); font-size: 26px; font-weight: 800; }
+    .stat-box .lbl { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; margin-top: 4px; }
+    .stat-box.accent-box { border-color: rgba(0,212,255,0.3); }
+    .stat-box.accent-box .num { color: var(--accent); }
+
+    /* LOADING */
+    .skeleton {
+      background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 8px; height: 16px; margin: 8px 0;
+    }
+
+    /* ANIMATIONS */
+    @keyframes fadeDown { from { opacity:0; transform: translateY(-12px); } to { opacity:1; transform: none; } }
+    @keyframes fadeUp   { from { opacity:0; transform: translateY(12px); }  to { opacity:1; transform: none; } }
+    @keyframes shimmer  { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  </style>
 </head>
 <body>
-    <h1>Módulo de Aprendizaje</h1>
+<div class="container">
 
-    <a href="/">Volver al inicio</a>
+  <header>
+    <div class="logo">🎓</div>
+    <div class="brand">
+      <h1>MÓDULO DE APRENDIZAJE</h1>
+      <p>Security Staff · Anti-Phishing</p>
+    </div>
+    <a href="/" class="btn-back">← Volver</a>
+  </header>
 
-    <h2>Lección diaria</h2>
-    <div id="daily-lesson"></div>
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-lesson" onclick="showTab('lesson')">📘 Lección diaria</button>
+    <button class="tab-btn" id="tab-quiz"   onclick="showTab('quiz')">📝 Práctica</button>
+    <button class="tab-btn" id="tab-progress" onclick="showTab('progress')">📊 Mi progreso</button>
+  </div>
 
-    <h2>Preguntas de práctica</h2>
-    <div id="quiz-section"></div>
+  <!-- ===== LECCIÓN DIARIA ===== -->
+  <div class="panel active" id="panel-lesson">
+    <div class="section-label">// Lección del día</div>
+    <div class="card" id="lesson-card">
+      <div class="skeleton" style="width:40%;height:12px;margin-bottom:16px"></div>
+      <div class="skeleton" style="width:100%;height:80px"></div>
+    </div>
+  </div>
 
-    <h2>Tu progreso</h2>
-    <div id="progress-section"></div>
+  <!-- ===== QUIZ ===== -->
+  <div class="panel" id="panel-quiz">
+    <div class="section-label">// Preguntas de práctica</div>
+    <div class="card" id="quiz-card">
+      <div class="skeleton" style="width:60%;height:12px;margin-bottom:16px"></div>
+      <div class="skeleton" style="width:100%;height:60px"></div>
+    </div>
+  </div>
 
-    <script>
-        async function loadLesson() {
-            const res = await fetch('/api/learning/daily-lesson');
-            const data = await res.json();
-            document.getElementById('daily-lesson').innerHTML =
-                `<h3>${data.lesson.title}</h3><p>${data.lesson.content}</p>`;
-        }
+  <!-- ===== PROGRESO ===== -->
+  <div class="panel" id="panel-progress">
+    <div class="section-label">// Tu progreso</div>
+    <div class="card" id="progress-card">
+      <div class="skeleton" style="width:50%;height:20px;margin-bottom:12px"></div>
+      <div class="skeleton" style="width:100%;height:12px"></div>
+    </div>
+  </div>
 
-        async function loadProgress() {
-            const res = await fetch('/api/learning/progress');
-            const data = await res.json();
-            document.getElementById('progress-section').innerHTML =
-                `<p>${data.completed_lessons}/${data.total_lessons} (${data.percentage}%)</p>` +
-                (data.motivational_message
-                    ? `<p>${data.motivational_message}</p>`
-                    : '');
-        }
+</div>
 
-        loadLesson();
-        loadProgress();
-    </script>
+<script>
+// ── State ───────────────────────────────────────────────
+let questions = [];
+let currentQ  = 0;
+let answered  = false;
+let quizLoaded = false;
+
+// ── Tabs ────────────────────────────────────────────────
+function showTab(name) {
+  ['lesson','quiz','progress'].forEach(t => {
+    document.getElementById('panel-' + t).classList.toggle('active', t === name);
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+  });
+  if (name === 'quiz' && !quizLoaded) loadQuiz();
+  if (name === 'progress') loadProgress();
+}
+
+// ── Daily Lesson ────────────────────────────────────────
+async function loadLesson() {
+  try {
+    const res  = await fetch('/api/learning/daily-lesson');
+    const data = await res.json();
+    const L    = data.lesson;
+
+    const viewed = L.already_viewed;
+    const icon   = L.icon || '📘';
+    const tip    = L.tip  ? `<div class="lesson-tip">${L.tip}</div>` : '';
+
+    document.getElementById('lesson-card').innerHTML = `
+      <div class="lesson-header">
+        <div class="lesson-icon">${icon}</div>
+        <div>
+          <div class="lesson-title">${L.title}</div>
+          ${viewed ? '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">✓ Vista hoy</div>' : ''}
+        </div>
+      </div>
+      <div class="lesson-body">${L.content}</div>
+      ${tip}
+      ${viewed
+        ? '<span class="badge-viewed">✓ Lección completada hoy</span>'
+        : `<button class="btn-primary" id="complete-btn" onclick="completeLesson(${L.id})">
+             ✓ Marcar como completada
+           </button>`
+      }
+    `;
+  } catch(e) {
+    document.getElementById('lesson-card').innerHTML =
+      '<p style="color:var(--danger)">⚠ No se pudo cargar la lección. Verifica que Flask esté corriendo.</p>';
+  }
+}
+
+async function completeLesson(id) {
+  const btn = document.getElementById('complete-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  await fetch('/api/learning/complete-lesson', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({lesson_id: id})
+  });
+  loadLesson();
+  loadProgress();
+}
+
+// ── Quiz ────────────────────────────────────────────────
+async function loadQuiz() {
+  try {
+    const res  = await fetch('/api/learning/questions');
+    const data = await res.json();
+    questions  = data.questions || [];
+    quizLoaded = true;
+    currentQ   = 0;
+    renderQuestion();
+  } catch(e) {
+    document.getElementById('quiz-card').innerHTML =
+      '<p style="color:var(--danger)">⚠ Error cargando preguntas.</p>';
+  }
+}
+
+function renderQuestion() {
+  const card = document.getElementById('quiz-card');
+  answered = false;
+
+  if (!questions.length) {
+    card.innerHTML = '<p style="color:var(--text-muted)">No hay preguntas disponibles.</p>';
+    return;
+  }
+
+  const q      = questions[currentQ];
+  const total  = questions.length;
+  const pct    = Math.round(((currentQ) / total) * 100);
+  const letters = ['A','B','C','D'];
+
+  const opts = q.options.map((opt, i) => `
+    <button class="option-btn" id="opt-${i}" onclick="checkAnswer(${q.id}, ${i})">
+      <span class="option-letter">${letters[i]}</span>
+      ${opt}
+    </button>
+  `).join('');
+
+  const scenario = q.scenario
+    ? `<div class="scenario-tag">${q.scenario}</div>`
+    : '';
+
+  card.innerHTML = `
+    <div class="question-counter">
+      <span style="font-size:12px;color:var(--text-muted)">Pregunta ${currentQ+1} de ${total}</span>
+      <div class="q-progress-track">
+        <div class="q-progress-fill" style="width:${pct}%"></div>
+      </div>
+    </div>
+    ${scenario}
+    <p class="question-text">${q.question}</p>
+    <div class="options-grid" id="options-grid">${opts}</div>
+    <div id="feedback-area"></div>
+  `;
+}
+
+async function checkAnswer(questionId, selectedIndex) {
+  if (answered) return;
+  answered = true;
+
+  // Disable all
+  document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+
+  const res    = await fetch('/api/learning/check-answer', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({question_id: questionId, selected_index: selectedIndex})
+  });
+  const result = await res.json();
+
+  const correct = result.correct;
+  const cIdx    = result.correct_answer;
+
+  document.getElementById(`opt-${selectedIndex}`).classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) document.getElementById(`opt-${cIdx}`).classList.add('correct');
+
+  const fb = document.getElementById('feedback-area');
+  fb.innerHTML = `
+    <div class="feedback-box ${correct ? 'correct' : 'wrong'}">
+      <div class="feedback-title">${correct ? '✅ ¡Correcto!' : '❌ Incorrecto'}</div>
+      <div>${result.explanation}</div>
+    </div>
+    <button class="btn-primary" style="margin-top:16px" onclick="nextQuestion()">
+      ${currentQ + 1 < questions.length ? '→ Siguiente pregunta' : '↺ Reiniciar quiz'}
+    </button>
+  `;
+
+  loadProgress();
+}
+
+function nextQuestion() {
+  currentQ++;
+  if (currentQ >= questions.length) currentQ = 0;
+  renderQuestion();
+}
+
+// ── Progress ─────────────────────────────────────────────
+async function loadProgress() {
+  try {
+    const res  = await fetch('/api/learning/progress');
+    const data = await res.json();
+
+    const pct = data.percentage || 0;
+
+    document.getElementById('progress-card').innerHTML = `
+      <div class="progress-stat">
+        <div>
+          <div class="stat-label">Avance general</div>
+          <div class="stat-value">${pct}%</div>
+        </div>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" style="width:${pct}%"></div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-box accent-box">
+          <div class="num">${data.completed_lessons}</div>
+          <div class="lbl">Lecciones completadas</div>
+        </div>
+        <div class="stat-box">
+          <div class="num">${data.total_lessons}</div>
+          <div class="lbl">Total de lecciones</div>
+        </div>
+      </div>
+
+      ${data.motivational_message
+        ? `<p class="motivation">💬 ${data.motivational_message}</p>`
+        : ''}
+    `;
+  } catch(e) {
+    document.getElementById('progress-card').innerHTML =
+      '<p style="color:var(--danger)">⚠ Error cargando progreso.</p>';
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────
+loadLesson();
+loadProgress();
+</script>
 </body>
 </html>
