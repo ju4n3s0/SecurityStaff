@@ -51,7 +51,7 @@ class MessageResult:
     # Metadata
     analyzed_at: str = field(default_factory=lambda: datetime.now().isoformat())
     model_used: str = ""
-    analysis_source: str = "gemini"
+    analysis_source: str = "ollama"
 
     def to_dict(self) -> dict:
         return {

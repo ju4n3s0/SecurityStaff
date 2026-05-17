@@ -1,12 +1,12 @@
 """
-Módulo de análisis de mensajes con Gemini API
+Módulo de análisis de mensajes con Ollama AI
 """
 
 import json
 import logging
+import os
 import re
-from google import genai
-from google.genai import types
+import ollama
 from modules.models import MessageResult, RiskLevel, ThreatCategory
 
 logger = logging.getLogger(__name__)
@@ -49,21 +49,36 @@ No incluyas ningún texto fuera del JSON."""
 
 
 class MessageAnalyzer:
-    """Analizador de mensajes usando Gemini AI"""
+    """Analizador de mensajes usando Ollama (local LLM)"""
 
-    MODEL_NAME = "gemini-2.5-flash"
+    DEFAULT_MODEL = "glm-4.6:cloud"
     VALID_RISK_LEVELS = {"safe", "suspicious", "dangerous"}
     VALID_CATEGORIES = {"none", "phishing", "fraud", "spam", "malware", "social_engineering", "scam", "unknown"}
 
-    def __init__(self, api_key: str):
-        if not api_key:
-            logger.warning("GEMINI_API_KEY no configurada. El análisis no funcionará correctamente.")
-            self._configured = False
-            self._client = None
-        else:
-            self._client = genai.Client(api_key=api_key)
+    def __init__(self, api_key: str = ""):
+        """
+        Inicializa el analizador.
+        El parámetro api_key se mantiene por compatibilidad pero no se usa con Ollama.
+        Configura Ollama mediante variables de entorno:
+        - OLLAMA_HOST: host del servicio Ollama (default: http://localhost:11434)
+        - OLLAMA_MODEL: nombre del modelo a usar (default: glm4:4.6b)
+        """
+        # Ignorar api_key para compatibilidad, pero advertir si se proporciona
+        if api_key:
+            logger.warning("Se proporcionó api_key pero Ollama no la utiliza. Configura OLLAMA_HOST y OLLAMA_MODEL en su lugar.")
+
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        model = os.environ.get("OLLAMA_MODEL", self.DEFAULT_MODEL)
+
+        try:
+            self._client = ollama.Client(host=host)
+            self._model = model
             self._configured = True
-            logger.info(f"MessageAnalyzer inicializado con modelo {self.MODEL_NAME}")
+            logger.info(f"MessageAnalyzer inicializado con Ollama modelo {self._model} en {host}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Ollama client: {e}")
+            self._client = None
+            self._configured = False
 
     def analyze(self, content: str, msg_type: str = "sms", sender: str = "Desconocido", subject: str = "") -> MessageResult:
         """
@@ -83,20 +98,20 @@ class MessageAnalyzer:
             msg_type=msg_type,
             sender=sender,
             subject=subject,
-            model_used=self.MODEL_NAME if self._configured else "not_configured"
+            model_used=self._model if self._configured else "not_configured"
         )
 
         if not self._configured:
             result.risk_level = RiskLevel.SUSPICIOUS
             result.risk_score = 0.5
             result.threat_category = ThreatCategory.UNKNOWN
-            result.explanation = "API key de Gemini no configurada. Configura GEMINI_API_KEY para análisis real."
+            result.explanation = "Ollama no configurado correctamente. Verifica OLLAMA_HOST y OLLAMA_MODEL."
             result.indicators = ["Servicio de análisis no disponible"]
-            result.recommendation = "Configura la variable de entorno GEMINI_API_KEY con tu clave de Gemini."
+            result.recommendation = "Configura las variables de entorno OLLAMA_HOST y OLLAMA_MODEL."
             return result
 
         try:
-            raw_response = self._call_gemini(content, msg_type, sender, subject)
+            raw_response = self._call_ollama(content, msg_type, sender, subject)
             parsed = self._parse_response(raw_response)
             self._populate_result(result, parsed)
             logger.info(f"Análisis completado: risk_level={result.risk_level}, score={result.risk_score}")
@@ -104,17 +119,24 @@ class MessageAnalyzer:
         except ConnectionError:
             raise
         except json.JSONDecodeError as e:
-            logger.error(f"Error al parsear respuesta de Gemini: {e}")
+            logger.error(f"Error al parsear respuesta de Ollama: {e}")
             result.risk_level = RiskLevel.SUSPICIOUS
             result.risk_score = 0.5
             result.threat_category = ThreatCategory.UNKNOWN
             result.explanation = "No se pudo procesar la respuesta del analizador. Revisa manualmente."
             result.recommendation = "Procede con precaución y verifica el mensaje manualmente."
+        except Exception as e:
+            logger.error(f"Error inesperado en el analizador: {e}", exc_info=True)
+            result.risk_level = RiskLevel.SUSPICIOUS
+            result.risk_score = 0.5
+            result.threat_category = ThreatCategory.UNKNOWN
+            result.explanation = "Error interno del analizador. Revisa los logs."
+            result.recommendation = "Procede con precaución."
 
         return result
 
-    def _call_gemini(self, content: str, msg_type: str, sender: str, subject: str) -> str:
-        """Realiza la llamada a la API de Gemini"""
+    def _call_ollama(self, content: str, msg_type: str, sender: str, subject: str) -> str:
+        """Realiza la llamada a la API de Ollama"""
         subject_line = f"ASUNTO: {subject}\n" if subject else ""
         prompt = ANALYSIS_PROMPT.format(
             msg_type=msg_type.upper(),
@@ -123,63 +145,63 @@ class MessageAnalyzer:
             content=content
         )
 
-        from pydantic import BaseModel, Field
-        from typing import List
-        
-        class AnalysisSchema(BaseModel):
-            risk_level: str = Field(description="Nivel de riesgo: safe, suspicious o dangerous")
-            risk_score: float = Field(description="Score de 0.0 a 1.0")
-            threat_category: str = Field(description="Categoría: none, phishing, fraud, spam, malware, social_engineering, scam o unknown")
-            explanation: str = Field(description="Explicación concisa")
-            indicators: List[str] = Field(description="Lista de indicadores sospechosos")
-            recommendation: str = Field(description="Acción recomendada al usuario")
-
         try:
-            response = self._client.models.generate_content(
-                model=self.MODEL_NAME,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    max_output_tokens=1024,
-                    response_mime_type="application/json",
-                    response_schema=AnalysisSchema,
-                    safety_settings=[
-                        types.SafetySetting(
-                            category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                        types.SafetySetting(
-                            category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
-                            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                        types.SafetySetting(
-                            category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                        types.SafetySetting(
-                            category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                            threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                    ]
-                )
+            response = self._client.chat(
+                model=self._model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+                # Sin format="json" para que el modelo responda libremente
+                options={
+                    "temperature": 0.1,
+                    "num_predict": 4096,
+                }
             )
-            return response.text
+            content = response.message.content
+            if not content and response.message.thinking:
+                thinking = response.message.thinking
+                # Buscar JSON dentro del thinking
+                json_match = re.search(r'\{[\s\S]*\}', thinking)
+                if json_match:
+                    content = json_match.group(0)
+
+            return content
+            # DEBUG TEMPORAL
+            print("=== TIPO DE RESPUESTA ===", type(response))
+            print("=== RESPUESTA COMPLETA ===", response)
+            try:
+                print("=== message.content ===", response.message.content)
+            except:
+                pass
+            try:
+                print("=== ['message']['content'] ===", response['message']['content'])
+            except:
+                pass
+
+            return response.message.content
+            # La librería ollama 0.6+ devuelve objetos, no diccionarios
+            
         except Exception as e:
             error_msg = str(e).lower()
-            if "api key" in error_msg or "authentication" in error_msg or "permission" in error_msg:
-                raise ConnectionError(f"Error de autenticación con Gemini: {e}")
-            elif "quota" in error_msg or "rate limit" in error_msg:
-                raise ConnectionError(f"Límite de cuota de Gemini alcanzado: {e}")
+            if "connection" in error_msg or "refused" in error_msg:
+                raise ConnectionError(f"No se pudo conectar a Ollama en {self._client._client.base_url}: {e}")
             else:
-                raise ConnectionError(f"Error al contactar Gemini: {e}")
+                raise ConnectionError(f"Error al contactar Ollama: {e}")
 
     def _parse_response(self, raw_text: str) -> dict:
-        """Parsea la respuesta JSON de Gemini"""
-        logger.error(f"Respuesta cruda de Gemini: {raw_text}")
-        # Limpiar markdown si Gemini lo incluye
+        """Parsea la respuesta JSON de Ollama"""
+        logger.error(f"Respuesta cruda de Ollama: {raw_text}")
+        # Limpiar markdown si Ollama lo incluye
         clean = re.sub(r'```(?:json)?\s*|\s*```', '', raw_text).strip()
         try:
-            return json.loads(clean)
+            parsed = json.loads(clean)
+            if not isinstance(parsed, dict):
+                logger.error(f"Respuesta de Ollama no es un objeto JSON: {parsed}")
+                raise ValueError(f"Se esperaba un objeto JSON, pero se recibió {type(parsed).__name__}")
+            return parsed
         except json.JSONDecodeError as e:
             logger.error(f"Error parseando JSON. Texto limpio: {clean}")
             raise e

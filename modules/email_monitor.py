@@ -41,9 +41,12 @@ class EmailMonitor:
         self.max_emails_per_check = max_emails_per_check
         self.is_running = False
         self.callback = None  # Para WebSocket/notificaciones en tiempo real
-        # Control simple de cuota para llamadas a Gemini (timestamps de llamadas)
+        # Control simple de cuota para llamadas al analizador (timestamps de llamadas)
         self.call_timestamps = deque()
-        self.gemini_max_calls = int(os.environ.get('GEMINI_MAX_CALLS_PER_MINUTE', 15))
+        self.max_calls_per_minute = int(
+            os.environ.get('OLLAMA_MAX_CALLS_PER_MINUTE',
+                           os.environ.get('GEMINI_MAX_CALLS_PER_MINUTE', 15))
+        )
     
     def set_threat_callback(self, callback: Callable):
         """
@@ -129,14 +132,14 @@ class EmailMonitor:
                 self.connector.move_to_label(message_id, 'SPAM')
                 return 0
 
-            # Pre-filtro local para ahorrar llamadas a Gemini
+            # Pre-filtro local para ahorrar llamadas al analizador
             try:
                 send, reasons = True, {}
             except Exception:
                 send, reasons = True, {}
 
             if not send:
-                logger.info(f"Prefiltro: correo {message_id[:10]} marcado como seguro (no enviado a Gemini)")
+                logger.info(f"Prefiltro: correo {message_id[:10]} marcado como seguro (no enviado al analizador)")
                 # Construir resultado seguro mínimo y guardarlo
                 safe_result = {
                     'message': {
@@ -166,25 +169,25 @@ class EmailMonitor:
                     pass
                 return -1
             
-            # Analizar con Gemini
+            # Analizar con el analizador (Ollama)
             # Control sencillo de cuota: limitar llamadas por minuto
             now = time.time()
             # limpiar timestamps viejos (>60s)
             while self.call_timestamps and now - self.call_timestamps[0] > 60:
                 self.call_timestamps.popleft()
 
-            if len(self.call_timestamps) >= self.gemini_max_calls:
+            if len(self.call_timestamps) >= self.max_calls_per_minute:
                 # Si el tiempo de espera es pequeño, esperamos, si no, saltamos este ciclo
                 oldest = self.call_timestamps[0]
                 wait = 60 - (now - oldest)
                 if wait <= 5:
-                    logger.info(f"Límite de llamadas a Gemini alcanzado, esperando {wait:.1f}s")
+                    logger.info(f"Límite de llamadas al analizador alcanzado, esperando {wait:.1f}s")
                     time.sleep(wait)
                     now = time.time()
                     while self.call_timestamps and now - self.call_timestamps[0] > 60:
                         self.call_timestamps.popleft()
                 else:
-                    logger.warning("Límite de llamadas a Gemini alcanzado; posponiendo análisis de este correo")
+                    logger.warning("Límite de llamadas al analizador alcanzado; posponiendo análisis de este correo")
                     return 0
 
             analysis_result = self.analyzer.analyze(
@@ -198,7 +201,7 @@ class EmailMonitor:
             try:
                 self.call_timestamps.append(time.time())
                 # mantener deque en tamaño razonable
-                while len(self.call_timestamps) > self.gemini_max_calls:
+                while len(self.call_timestamps) > self.max_calls_per_minute:
                     self.call_timestamps.popleft()
             except Exception:
                 pass

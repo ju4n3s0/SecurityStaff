@@ -44,15 +44,12 @@ def initialize_components():
     
     logger.info("🔧 Inicializando componentes...")
     
-    # 1. Verificar API Key de Gemini
-    gemini_api_key = os.environ.get('GEMINI_API_KEY', '')
-    if not gemini_api_key:
-        logger.error("❌ GEMINI_API_KEY no configurada en .env")
+    # 1. Inicializar analizador de mensajes (Ollama)
+    logger.info("  → Inicializando analizador de mensajes con Ollama...")
+    analyzer = MessageAnalyzer(api_key='')  # API key not used with Ollama
+    if not analyzer._configured:
+        logger.error("❌ Ollama no configurado correctamente. Verifica OLLAMA_HOST y OLLAMA_MODEL.")
         sys.exit(1)
-    
-    # 2. Inicializar analizador de mensajes
-    logger.info("  → Conectando a Gemini API...")
-    analyzer = MessageAnalyzer(api_key=gemini_api_key)
     
     # 3. Inicializar conector Gmail
     logger.info("  → Conectando a Gmail...")

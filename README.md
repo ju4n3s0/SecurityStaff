@@ -1,6 +1,6 @@
-# 🛡️ Security Staff — Detector de Amenazas con Gemini AI
+# 🛡️ Security Staff — Detector de Amenazas con Ollama AI
 
-Aplicación web para análisis de mensajes SMS y correos electrónicos usando Google Gemini AI. Detecta phishing, fraudes, malware, spam e ingeniería social en tiempo real. Incluye historial persistente e integración con Gmail para monitoreo automático.
+Aplicación web para análisis de mensajes SMS y correos electrónicos usando Ollama AI (modelo GLM 4.6). Detecta phishing, fraudes, malware, spam e ingeniería social en tiempo real. Incluye historial persistente e integración con Gmail para monitoreo automático.
 
 ---
 
@@ -17,7 +17,7 @@ SecurityStaff/
 ├── threats.db                  # Base de datos SQLite (NO subir al repo)
 ├── modules/
 │   ├── __init__.py
-│   ├── analyzer.py             # Integración con Gemini AI
+│   ├── analyzer.py             # Integración con Ollama AI
 │   ├── models.py               # Modelos de datos (RiskLevel, MessageResult)
 │   ├── email_connector.py      # Conector OAuth2 para Gmail API
 │   ├── email_monitor.py        # Monitor automático de correos
@@ -39,14 +39,17 @@ pip install -r requirements.txt
 ### 2. Configurar variables de entorno
 Edita el archivo `.env` con tus valores:
 ```env
-GEMINI_API_KEY=tu_api_key_aqui
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=glm4:4.6b
 PORT=5002
 DEBUG=True
 THREAT_DB_FILE=threats.db
 CHECK_INTERVAL=30
 ```
-
-Obtén tu API Key gratuita de Gemini en: https://aistudio.google.com/app/apikey
+Para usar Ollama, primero instala Ollama desde https://ollama.com/ y luego descarga el modelo GLM 4.6:
+```bash
+ollama pull glm4:4.6b
+```
 
 ### 3. Ejecutar la aplicación web
 ```bash
@@ -84,7 +87,7 @@ La primera vez se abrirá el navegador para autorizar el acceso a Gmail. Luego e
 - Selecciona tipo de mensaje: **SMS** o **Email**
 - Ingresa remitente, asunto (si es email) y contenido
 - Haz clic en **ANALIZAR MENSAJE**
-- Gemini AI devuelve: nivel de riesgo, score, categoría, indicadores y recomendación
+- Ollama AI devuelve: nivel de riesgo, score, categoría, indicadores y recomendación
 
 ### Historial (`/dashboard`)
 - Ve todos los correos analizados (automáticos via Gmail + manuales)
@@ -125,8 +128,8 @@ Analiza un mensaje y retorna la clasificación de riesgo.
   },
   "metadata": {
     "analyzed_at": "2024-01-01T12:00:00",
-    "model_used": "gemini-2.5-flash",
-    "analysis_source": "gemini"
+    "model_used": "glm4:4.6b",
+    "analysis_source": "ollama"
   }
 }
 ```

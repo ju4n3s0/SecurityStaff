@@ -1,52 +1,34 @@
 from flask import Flask, request, jsonify
 import os
-from modules.analysis_service import AnalysisService
+from modules.analyzer import MessageAnalyzer
 
 app = Flask(__name__)
 
-service = AnalysisService(api_key=os.getenv("GEMINI_API_KEY"))
+# Analizador (Ollama)
+analyzer = MessageAnalyzer(api_key='')  # API key not used with Ollama
 
 # -------------------------
 # ANALIZAR MENSAJE
 # -------------------------
 @app.route("/analyze", methods=["POST"])
 def analyze():
-
     data = request.json
+    if not data:
+        return jsonify({"error": "No JSON data"}), 400
 
     content = data.get("content")
-    msg_type = data.get("type")
+    msg_type = data.get("type", "sms")
     sender = data.get("sender", "")
     subject = data.get("subject", "")
 
     if not content or not msg_type:
-        return jsonify({"error": "Faltan datos"}), 400
+        return jsonify({"error": "Faltan datos: content y type son requeridos"}), 400
 
-    result = service.analyze_message(content, msg_type, sender, subject)
-
-    return jsonify(result)
-
-
-# -------------------------
-# HISTORIAL
-# -------------------------
-@app.route("/history", methods=["GET"])
-def history():
-    return jsonify(service.history.get_all())
-
-
-@app.route("/history/<int:id>", methods=["GET"])
-def history_detail(id):
-    record = service.history.get_by_id(id)
-    if not record:
-        return jsonify({"error": "No encontrado"}), 404
-    return jsonify(record)
-
-
-@app.route("/history/<int:id>/false-positive", methods=["POST"])
-def false_positive(id):
-    ok = service.history.mark_false_positive(id)
-    return jsonify({"success": ok})
+    try:
+        result = analyzer.analyze(content, msg_type, sender, subject)
+        return jsonify(result.to_dict())
+    except Exception as e:
+        return jsonify({"error": f"Error interno: {str(e)}"}), 500
 
 
 # -------------------------
@@ -54,7 +36,7 @@ def false_positive(id):
 # -------------------------
 @app.route("/")
 def home():
-    return jsonify({"status": "Shield activo"})
+    return jsonify({"status": "Shield activo (Ollama)", "analyzer_configured": analyzer._configured})
 
 
 if __name__ == "__main__":

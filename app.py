@@ -18,9 +18,8 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'shield-dev-key-2024')
-app.config['GEMINI_API_KEY'] = os.environ.get('GEMINI_API_KEY', '')
 
-analyzer = MessageAnalyzer(api_key=app.config['GEMINI_API_KEY'])
+analyzer = MessageAnalyzer(api_key='')  # API key not used with Ollama
 db_file = os.environ.get('THREAT_DB_FILE', 'threats.db')
 threat_db = ThreatDatabase(db_file=db_file)
 
@@ -77,8 +76,8 @@ def analyze_message():
         logger.error(f"Error de validación: {e}")
         return jsonify({'error': str(e)}), 400
     except ConnectionError as e:
-        logger.error(f"Error de conexión con Gemini: {e}")
-        return jsonify({'error': 'No se pudo conectar con el servicio de análisis. Verifica tu API key.'}), 503
+        logger.error(f"Error de conexión con el servicio de análisis: {e}")
+        return jsonify({'error': 'No se pudo conectar con el servicio de análisis. Verifica la configuración de Ollama.'}), 503
     except Exception as e:
         logger.error(f"Error inesperado: {e}")
         return jsonify({'error': 'Error interno del servidor'}), 500
@@ -90,7 +89,7 @@ def health_check():
     return jsonify({
         'status': 'ok',
         'service': 'Security Staff Message Analyzer',
-        'gemini_configured': bool(app.config['GEMINI_API_KEY'])
+        'analyzer_configured': analyzer._configured
     })
 
 @app.route('/api/threats', methods=['GET'])
@@ -141,11 +140,11 @@ if __name__ == '__main__':
     print(f"""
     ======================================
     SECURITY STAFF - Detector Mensajes
-         Maliciosos con Gemini AI         
+         Maliciosos con Ollama AI
     ======================================
-    
+
     > Servidor iniciado en http://localhost:{port}
-    > API Key configurada: {'Si' if app.config['GEMINI_API_KEY'] else 'No (configura GEMINI_API_KEY)'}
+    > Ollama configurado: {'Si' if analyzer._configured else 'No (configura OLLAMA_HOST y OLLAMA_MODEL)'}
     """)
     
     app.run(debug=debug, host='0.0.0.0', port=port)
