@@ -33,6 +33,10 @@ def index():
 def dashboard():
     return render_template('dashboard.html')
 
+@app.route('/learning')
+def learning():
+    return render_template('learning.html')
+
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze_message():

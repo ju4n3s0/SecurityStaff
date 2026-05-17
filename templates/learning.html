@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Aprende sobre Phishing</title>
+</head>
+<body>
+    <h1>Módulo de Aprendizaje</h1>
+
+    <a href="/">Volver al inicio</a>
+
+    <h2>Lección diaria</h2>
+    <div id="daily-lesson"></div>
+
+    <h2>Preguntas de práctica</h2>
+    <div id="quiz-section"></div>
+
+    <h2>Tu progreso</h2>
+    <div id="progress-section"></div>
+
+    <script>
+        async function loadLesson() {
+            const res = await fetch('/api/learning/daily-lesson');
+            const data = await res.json();
+            document.getElementById('daily-lesson').innerHTML =
+                `<h3>${data.lesson.title}</h3><p>${data.lesson.content}</p>`;
+        }
+
+        async function loadProgress() {
+            const res = await fetch('/api/learning/progress');
+            const data = await res.json();
+            document.getElementById('progress-section').innerHTML =
+                `<p>${data.completed_lessons}/${data.total_lessons} (${data.percentage}%)</p>` +
+                (data.motivational_message
+                    ? `<p>${data.motivational_message}</p>`
+                    : '');
+        }
+
+        loadLesson();
+        loadProgress();
+    </script>
+</body>
+</html>
